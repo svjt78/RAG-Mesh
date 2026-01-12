@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  ragmesh-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ragmesh-api
+    ports:
+      - "${API_PORT:-8017}:8017"
+    volumes:
+      # Mount source code for hot reload
+      - ./backend/app:/app/app:ro
+      # Mount data directories
+      - ./data:/app/data
+      - ./config:/app/config
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-3.5-turbo}
+      - OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8017/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  ragmesh-ui:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ragmesh-ui
+    ports:
+      - "${FRONTEND_PORT:-3017}:3017"
+    volumes:
+      # Mount source code for hot reload
+      - ./frontend/app:/app/app
+      - ./frontend/components:/app/components
+      - ./frontend/lib:/app/lib
+      # Exclude node_modules from mounting
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8017
+    depends_on:
+      - ragmesh-api
+    restart: unless-stopped
+
+networks:
+  default:
+    name: ragmesh-network

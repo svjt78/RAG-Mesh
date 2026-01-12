@@ -1,0 +1,50 @@
+{
+  "description": "Context compilation and packing configurations",
+  "profiles": {
+    "default": {
+      "description": "Standard context configuration for insurance queries",
+      "max_context_tokens": 3000,
+      "citation_format": "inline",
+      "include_page_numbers": true,
+      "include_doc_metadata": true,
+      "redact_pii": true,
+      "pack_strategy": "rank_ordered",
+      "reserve_tokens_for_query": 100,
+      "reserve_tokens_for_instructions": 200
+    },
+    "large_context": {
+      "description": "Larger context window for complex queries",
+      "max_context_tokens": 6000,
+      "citation_format": "inline",
+      "include_page_numbers": true,
+      "include_doc_metadata": true,
+      "redact_pii": true,
+      "pack_strategy": "rank_ordered",
+      "reserve_tokens_for_query": 150,
+      "reserve_tokens_for_instructions": 250
+    },
+    "compact": {
+      "description": "Minimal context for simple queries",
+      "max_context_tokens": 1500,
+      "citation_format": "inline",
+      "include_page_numbers": true,
+      "include_doc_metadata": false,
+      "redact_pii": true,
+      "pack_strategy": "rank_ordered",
+      "reserve_tokens_for_query": 50,
+      "reserve_tokens_for_instructions": 150
+    },
+    "citation_heavy": {
+      "description": "Verbose citation information",
+      "max_context_tokens": 3500,
+      "citation_format": "detailed",
+      "include_page_numbers": true,
+      "include_doc_metadata": true,
+      "redact_pii": true,
+      "pack_strategy": "citation_first",
+      "reserve_tokens_for_query": 100,
+      "reserve_tokens_for_instructions": 300
+    }
+  },
+  "default_profile": "default"
+}

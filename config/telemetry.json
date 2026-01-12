@@ -1,0 +1,82 @@
+{
+  "description": "Telemetry and observability configurations",
+  "default": {
+    "event_verbosity": "standard",
+    "track_costs": true,
+    "track_tokens": true,
+    "track_latency": true,
+    "sample_rate": 1.0,
+    "enable_tracing": true,
+    "export_events": true,
+    "retention_days": 30
+  },
+  "profiles": {
+    "minimal": {
+      "event_verbosity": "minimal",
+      "track_costs": true,
+      "track_tokens": false,
+      "track_latency": false,
+      "sample_rate": 0.1,
+      "enable_tracing": false,
+      "export_events": false,
+      "retention_days": 7,
+      "description": "Minimal telemetry for production with low overhead"
+    },
+    "standard": {
+      "event_verbosity": "standard",
+      "track_costs": true,
+      "track_tokens": true,
+      "track_latency": true,
+      "sample_rate": 1.0,
+      "enable_tracing": true,
+      "export_events": true,
+      "retention_days": 30,
+      "description": "Standard telemetry for balanced observability"
+    },
+    "detailed": {
+      "event_verbosity": "detailed",
+      "track_costs": true,
+      "track_tokens": true,
+      "track_latency": true,
+      "sample_rate": 1.0,
+      "enable_tracing": true,
+      "export_events": true,
+      "retention_days": 90,
+      "description": "Comprehensive telemetry for debugging and analysis"
+    }
+  },
+  "event_types": {
+    "minimal": [
+      "run_started",
+      "run_completed",
+      "run_blocked",
+      "run_failed"
+    ],
+    "standard": [
+      "run_started",
+      "retrieval_started",
+      "fusion_completed",
+      "generation_completed",
+      "judge_completed",
+      "run_completed",
+      "run_blocked",
+      "run_failed"
+    ],
+    "detailed": [
+      "run_started",
+      "retrieval_started",
+      "vector_search_completed",
+      "document_search_completed",
+      "graph_search_completed",
+      "fusion_completed",
+      "context_compiled",
+      "generation_completed",
+      "judge_started",
+      "judge_check_completed",
+      "judge_completed",
+      "run_completed",
+      "run_blocked",
+      "run_failed"
+    ]
+  }
+}

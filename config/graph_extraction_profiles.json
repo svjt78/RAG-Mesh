@@ -1,0 +1,179 @@
+{
+  "description": "Graph extraction configurations for different domains",
+  "profiles": {
+    "generic": {
+      "description": "General-purpose entity and relationship extraction for any domain",
+      "entity_types": [
+        "Person",
+        "Organization",
+        "Location",
+        "Date",
+        "Event",
+        "Concept",
+        "Product",
+        "Document",
+        "Term",
+        "Metric"
+      ],
+      "relationship_types": [
+        "RELATES_TO",
+        "PART_OF",
+        "LOCATED_IN",
+        "OCCURS_AT",
+        "CREATED_BY",
+        "REFERENCES",
+        "DEFINES",
+        "SUPPORTS",
+        "CONTRADICTS",
+        "PRECEDES"
+      ]
+    },
+    "insurance": {
+      "description": "Insurance domain-specific entity and relationship extraction",
+      "entity_types": [
+        "Coverage",
+        "Exclusion",
+        "Condition",
+        "Endorsement",
+        "Form",
+        "Definition",
+        "State",
+        "Term"
+      ],
+      "relationship_types": [
+        "AMENDS",
+        "EXCLUDES",
+        "SUBJECT_TO",
+        "APPLIES_IN",
+        "REFERENCES",
+        "DEFINES"
+      ]
+    },
+    "medical": {
+      "description": "Medical and healthcare domain entity and relationship extraction",
+      "entity_types": [
+        "Disease",
+        "Symptom",
+        "Treatment",
+        "Medication",
+        "Procedure",
+        "Anatomy",
+        "Patient",
+        "Provider",
+        "Diagnosis",
+        "Protocol"
+      ],
+      "relationship_types": [
+        "CAUSES",
+        "TREATS",
+        "CONTRAINDICATES",
+        "PRESCRIBED_FOR",
+        "LOCATED_IN",
+        "DIAGNOSED_WITH",
+        "ADMINISTERED_BY",
+        "FOLLOWS"
+      ]
+    },
+    "legal": {
+      "description": "Legal domain entity and relationship extraction",
+      "entity_types": [
+        "Statute",
+        "Case",
+        "Court",
+        "Party",
+        "Attorney",
+        "Judge",
+        "Jurisdiction",
+        "Precedent",
+        "Regulation",
+        "Contract"
+      ],
+      "relationship_types": [
+        "CITES",
+        "OVERRULES",
+        "DISTINGUISHES",
+        "APPLIES_TO",
+        "GOVERNS",
+        "CONFLICTS_WITH",
+        "INTERPRETS",
+        "ENFORCES"
+      ]
+    },
+    "financial": {
+      "description": "Financial and business domain entity and relationship extraction",
+      "entity_types": [
+        "Company",
+        "Investor",
+        "Security",
+        "Transaction",
+        "Market",
+        "Regulation",
+        "Financial_Statement",
+        "Asset",
+        "Liability",
+        "Metric"
+      ],
+      "relationship_types": [
+        "INVESTS_IN",
+        "OWNS",
+        "TRADES",
+        "REGULATED_BY",
+        "REPORTS",
+        "AFFECTS",
+        "CORRELATES_WITH",
+        "COMPETES_WITH"
+      ]
+    },
+    "technical": {
+      "description": "Technical documentation and software domain extraction",
+      "entity_types": [
+        "Component",
+        "API",
+        "Function",
+        "Parameter",
+        "Error",
+        "Configuration",
+        "Dependency",
+        "Version",
+        "Module",
+        "Interface"
+      ],
+      "relationship_types": [
+        "CALLS",
+        "DEPENDS_ON",
+        "IMPLEMENTS",
+        "EXTENDS",
+        "THROWS",
+        "CONFIGURES",
+        "REQUIRES",
+        "RETURNS"
+      ]
+    },
+    "academic": {
+      "description": "Academic and research domain entity and relationship extraction",
+      "entity_types": [
+        "Author",
+        "Publication",
+        "Institution",
+        "Theory",
+        "Method",
+        "Dataset",
+        "Experiment",
+        "Finding",
+        "Concept",
+        "Field"
+      ],
+      "relationship_types": [
+        "AUTHORED_BY",
+        "CITES",
+        "BUILDS_ON",
+        "CONTRADICTS",
+        "VALIDATES",
+        "APPLIES",
+        "AFFILIATED_WITH",
+        "CONTRIBUTES_TO"
+      ]
+    }
+  },
+  "default_profile": "generic"
+}

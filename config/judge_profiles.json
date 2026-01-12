@@ -1,0 +1,224 @@
+{
+  "description": "Judge validation profiles with 9 mandatory quality checks",
+  "profiles": {
+    "strict_insurance": {
+      "citation_coverage": {
+        "enabled": true,
+        "threshold": 0.3,
+        "hard_fail": true
+      },
+      "groundedness": {
+        "enabled": true,
+        "threshold": 0.75,
+        "hard_fail": true
+      },
+      "hallucination": {
+        "enabled": true,
+        "threshold": 0.15,
+        "hard_fail": true
+      },
+      "relevance": {
+        "enabled": true,
+        "threshold": 0.7,
+        "hard_fail": false
+      },
+      "consistency": {
+        "enabled": true,
+        "threshold": 0.7,
+        "hard_fail": false
+      },
+      "toxicity": {
+        "enabled": true,
+        "threshold": 0.1,
+        "hard_fail": true
+      },
+      "pii_leakage": {
+        "enabled": true,
+        "threshold": 0.0,
+        "hard_fail": true
+      },
+      "bias": {
+        "enabled": true,
+        "threshold": 0.2,
+        "hard_fail": true
+      },
+      "contradiction": {
+        "enabled": true,
+        "threshold": 0.15,
+        "hard_fail": true
+      }
+    },
+    "balanced": {
+      "description": "Balanced validation suitable for development/testing",
+      "citation_coverage": {
+        "enabled": true,
+        "threshold": 0.7,
+        "hard_fail": false,
+        "description": "Percentage of factual claims backed by citations"
+      },
+      "groundedness": {
+        "enabled": true,
+        "threshold": 0.7,
+        "hard_fail": true,
+        "description": "Claims must be entailed by evidence"
+      },
+      "hallucination": {
+        "enabled": true,
+        "threshold": 0.25,
+        "hard_fail": true,
+        "description": "Detection of fabricated information (lower is better)"
+      },
+      "relevance": {
+        "enabled": true,
+        "threshold": 0.6,
+        "hard_fail": false,
+        "description": "Answer addresses the query"
+      },
+      "consistency": {
+        "enabled": true,
+        "threshold": 0.7,
+        "hard_fail": false,
+        "description": "Internal consistency within answer"
+      },
+      "toxicity": {
+        "enabled": true,
+        "threshold": 0.2,
+        "hard_fail": true,
+        "description": "Toxic or offensive language (lower is better)"
+      },
+      "pii_leakage": {
+        "enabled": true,
+        "threshold": 0.0,
+        "hard_fail": true,
+        "description": "PII exposure (must be zero)"
+      },
+      "bias": {
+        "enabled": true,
+        "threshold": 0.3,
+        "hard_fail": false,
+        "description": "Biased or discriminatory language (lower is better)"
+      },
+      "contradiction": {
+        "enabled": true,
+        "threshold": 0.25,
+        "hard_fail": true,
+        "description": "Answer vs. evidence contradictions (lower is better)"
+      }
+    },
+    "lenient": {
+      "description": "Lenient validation for experimentation",
+      "citation_coverage": {
+        "enabled": true,
+        "threshold": 0.5,
+        "hard_fail": false,
+        "description": "Percentage of factual claims backed by citations"
+      },
+      "groundedness": {
+        "enabled": true,
+        "threshold": 0.6,
+        "hard_fail": false,
+        "description": "Claims must be entailed by evidence"
+      },
+      "hallucination": {
+        "enabled": true,
+        "threshold": 0.4,
+        "hard_fail": false,
+        "description": "Detection of fabricated information (lower is better)"
+      },
+      "relevance": {
+        "enabled": true,
+        "threshold": 0.5,
+        "hard_fail": false,
+        "description": "Answer addresses the query"
+      },
+      "consistency": {
+        "enabled": true,
+        "threshold": 0.6,
+        "hard_fail": false,
+        "description": "Internal consistency within answer"
+      },
+      "toxicity": {
+        "enabled": true,
+        "threshold": 0.3,
+        "hard_fail": false,
+        "description": "Toxic or offensive language (lower is better)"
+      },
+      "pii_leakage": {
+        "enabled": true,
+        "threshold": 0.1,
+        "hard_fail": false,
+        "description": "PII exposure"
+      },
+      "bias": {
+        "enabled": true,
+        "threshold": 0.4,
+        "hard_fail": false,
+        "description": "Biased or discriminatory language (lower is better)"
+      },
+      "contradiction": {
+        "enabled": true,
+        "threshold": 0.35,
+        "hard_fail": false,
+        "description": "Answer vs. evidence contradictions (lower is better)"
+      }
+    },
+    "critical_only": {
+      "description": "Only critical safety checks enabled",
+      "citation_coverage": {
+        "enabled": false,
+        "threshold": 0.0,
+        "hard_fail": false,
+        "description": "Disabled"
+      },
+      "groundedness": {
+        "enabled": true,
+        "threshold": 0.8,
+        "hard_fail": true,
+        "description": "Claims must be entailed by evidence"
+      },
+      "hallucination": {
+        "enabled": true,
+        "threshold": 0.2,
+        "hard_fail": true,
+        "description": "Detection of fabricated information (lower is better)"
+      },
+      "relevance": {
+        "enabled": false,
+        "threshold": 0.0,
+        "hard_fail": false,
+        "description": "Disabled"
+      },
+      "consistency": {
+        "enabled": false,
+        "threshold": 0.0,
+        "hard_fail": false,
+        "description": "Disabled"
+      },
+      "toxicity": {
+        "enabled": true,
+        "threshold": 0.1,
+        "hard_fail": true,
+        "description": "Toxic or offensive language (lower is better)"
+      },
+      "pii_leakage": {
+        "enabled": true,
+        "threshold": 0.0,
+        "hard_fail": true,
+        "description": "PII exposure (must be zero)"
+      },
+      "bias": {
+        "enabled": true,
+        "threshold": 0.2,
+        "hard_fail": true,
+        "description": "Biased or discriminatory language (lower is better)"
+      },
+      "contradiction": {
+        "enabled": true,
+        "threshold": 0.2,
+        "hard_fail": true,
+        "description": "Answer vs. evidence contradictions (lower is better)"
+      }
+    }
+  },
+  "default_profile": "strict_insurance"
+}

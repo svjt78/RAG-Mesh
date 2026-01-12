@@ -1,0 +1,66 @@
+{
+  "description": "Fusion and ranking configurations for combining retrieval modalities",
+  "profiles": {
+    "balanced": {
+      "description": "Equal weighting across all modalities",
+      "vector_weight": 1.0,
+      "document_weight": 1.0,
+      "graph_weight": 1.0,
+      "rrf_k": 60,
+      "max_chunks_per_doc": 3,
+      "min_distinct_docs": 2,
+      "dedup_threshold": 0.95,
+      "apply_diversity_constraints": true,
+      "final_top_k": 20
+    },
+    "vector_heavy": {
+      "description": "Prioritize semantic similarity from vector search",
+      "vector_weight": 2.0,
+      "document_weight": 1.0,
+      "graph_weight": 0.8,
+      "rrf_k": 60,
+      "max_chunks_per_doc": 4,
+      "min_distinct_docs": 1,
+      "dedup_threshold": 0.95,
+      "apply_diversity_constraints": true,
+      "final_top_k": 20
+    },
+    "graph_heavy": {
+      "description": "Prioritize graph relationships and structure",
+      "vector_weight": 0.8,
+      "document_weight": 0.8,
+      "graph_weight": 2.0,
+      "rrf_k": 60,
+      "max_chunks_per_doc": 3,
+      "min_distinct_docs": 3,
+      "dedup_threshold": 0.93,
+      "apply_diversity_constraints": true,
+      "final_top_k": 20
+    },
+    "keyword_heavy": {
+      "description": "Prioritize exact keyword matches from document search",
+      "vector_weight": 0.7,
+      "document_weight": 2.0,
+      "graph_weight": 0.8,
+      "rrf_k": 60,
+      "max_chunks_per_doc": 3,
+      "min_distinct_docs": 2,
+      "dedup_threshold": 0.95,
+      "apply_diversity_constraints": true,
+      "final_top_k": 20
+    },
+    "diverse": {
+      "description": "Maximize diversity across documents",
+      "vector_weight": 1.0,
+      "document_weight": 1.0,
+      "graph_weight": 1.0,
+      "rrf_k": 60,
+      "max_chunks_per_doc": 2,
+      "min_distinct_docs": 5,
+      "dedup_threshold": 0.90,
+      "apply_diversity_constraints": true,
+      "final_top_k": 25
+    }
+  },
+  "default_profile": "balanced"
+}

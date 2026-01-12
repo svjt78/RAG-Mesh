@@ -1,0 +1,61 @@
+{
+  "description": "Workflow configurations defining pipeline steps and behaviors",
+  "workflows": {
+    "default_workflow": {
+      "workflow_id": "default_workflow",
+      "description": "Standard insurance RAG workflow with all modalities",
+      "steps": [
+        "retrieval_started",
+        "vector_search",
+        "document_search",
+        "graph_search",
+        "fusion",
+        "context_compilation",
+        "generation",
+        "judge_validation"
+      ],
+      "enable_graph_retrieval": true,
+      "enable_reranking": false,
+      "fail_on_judge_block": false,
+      "timeout_per_step_seconds": 120,
+      "max_retry_attempts": 2
+    },
+    "fast_workflow": {
+      "workflow_id": "fast_workflow",
+      "description": "Fast workflow with vector-only retrieval, no graph",
+      "steps": [
+        "retrieval_started",
+        "vector_search",
+        "context_compilation",
+        "generation",
+        "judge_validation"
+      ],
+      "enable_graph_retrieval": false,
+      "enable_reranking": false,
+      "fail_on_judge_block": true,
+      "timeout_per_step_seconds": 60,
+      "max_retry_attempts": 0
+    },
+    "comprehensive_workflow": {
+      "workflow_id": "comprehensive_workflow",
+      "description": "Comprehensive workflow with reranking and strict validation",
+      "steps": [
+        "retrieval_started",
+        "vector_search",
+        "document_search",
+        "graph_search",
+        "fusion",
+        "reranking",
+        "context_compilation",
+        "generation",
+        "judge_validation"
+      ],
+      "enable_graph_retrieval": true,
+      "enable_reranking": true,
+      "fail_on_judge_block": true,
+      "timeout_per_step_seconds": 180,
+      "max_retry_attempts": 2
+    }
+  },
+  "default_workflow": "default_workflow"
+}

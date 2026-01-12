@@ -1,0 +1,43 @@
+{
+  "description": "Chunking strategy configurations for document processing",
+  "profiles": {
+    "default": {
+      "chunk_size": 500,
+      "chunk_overlap": 100,
+      "page_aware": true,
+      "max_chunks_per_doc": 100,
+      "sentence_aware": true,
+      "min_chunk_size": 10,
+      "preserve_paragraph_boundaries": true
+    },
+    "large_chunks": {
+      "chunk_size": 1000,
+      "chunk_overlap": 200,
+      "page_aware": true,
+      "max_chunks_per_doc": null,
+      "sentence_aware": true,
+      "min_chunk_size": 200,
+      "preserve_paragraph_boundaries": true
+    },
+    "small_chunks": {
+      "chunk_size": 300,
+      "chunk_overlap": 50,
+      "page_aware": true,
+      "max_chunks_per_doc": null,
+      "sentence_aware": true,
+      "min_chunk_size": 50,
+      "preserve_paragraph_boundaries": false
+    },
+    "page_based": {
+      "chunk_size": 2000,
+      "chunk_overlap": 0,
+      "page_aware": true,
+      "max_chunks_per_doc": null,
+      "sentence_aware": false,
+      "min_chunk_size": 100,
+      "preserve_paragraph_boundaries": false,
+      "comment": "One chunk per page approach"
+    }
+  },
+  "default_profile": "default"
+}

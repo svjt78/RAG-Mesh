@@ -1,0 +1,595 @@
+RAGMesh Implementation Plan
+Overview
+Build a production-grade insurance RAG framework with tri-modal retrieval (vector + graph + document), mandatory validation gates (9 judge checks), and complete observability. The system must be fully containerized, 100% configurable via JSON registries, and platform-agnostic using adapter interfaces.
+
+Non-Negotiable Constraints
+OpenAI GPT-3.5-turbo for ALL LLM operations (generation, embeddings, graph extraction, judge)
+Single .env file at repo root only
+No databases - file-based storage (JSON/JSONL)
+PDF-only ingestion
+Docker Compose for all execution with hot reload
+NetworkX for graph operations
+FAISS for vector storage
+100% configuration-driven via JSON registries
+Implementation Phases
+Phase 1: Foundation & Infrastructure
+Goal: Establish project structure, Docker setup, and core interfaces
+
+Project Scaffolding
+
+Create directory structure: backend/, frontend/, config/, data/
+Initialize backend: Python 3.11+ with FastAPI
+Initialize frontend: Next.js 14+ with TypeScript and Tailwind
+Create root .env with OpenAI credentials
+Create docker-compose.yml with two services:
+ragmesh-api: FastAPI with hot reload (uvicorn --reload)
+ragmesh-ui: Next.js dev mode
+Volume mounts: ./data, ./config, source code for hot reload
+Core Adapter Interfaces
+
+Create backend/app/adapters/base.py with abstract base classes:
+DocStoreAdapter: save_document, get_document, save_chunks, get_chunks
+VectorStoreAdapter: add_embeddings, search, save/load_index
+GraphStoreAdapter: add_nodes, add_edges, query_subgraph, get_supporting_chunks
+LLMAdapter: generate, embed, extract_entities
+JudgeAdapter: evaluate (returns JudgeReport)
+RerankAdapter: rerank (optional)
+Pydantic Domain Models
+
+Create backend/app/core/models.py with strict validation:
+Documents: Document, Chunk, Page
+Retrieval: VectorResult, DocumentResult, GraphResult, Subgraph, Node, Edge
+Artifacts: RetrievalBundle, ContextPack, Answer, JudgeReport
+Events: Event (run_id, step, timestamp, duration_ms, data)
+Config: All profile models (WorkflowProfile, RetrievalProfile, etc.)
+Critical Files:
+
+backend/app/adapters/base.py - Interface definitions
+backend/app/core/models.py - Data contracts
+docker-compose.yml - Service orchestration
+.env - Environment configuration
+Phase 2: Configuration System
+Goal: Create all JSON configuration registries with validation
+
+Configuration Files (in /config/)
+
+models.json: OpenAI model settings (gpt-3.5-turbo, text-embedding-3-small), timeouts, budgets
+workflows.json: Step ordering, fallback strategies, gating rules
+chunking_profiles.json: Chunk size/overlap, page-aware strategies, max chunks per doc
+retrieval_profiles.json: Per-modality config (vector k/threshold, doc boost factors, graph max_hops)
+fusion_profiles.json: RRF weights, diversity constraints, dedup rules
+context_profiles.json: Token budgets, compression, citation-first packing, redaction rules
+judge_profiles.json: All 9 checks with thresholds and hard-fail flags
+telemetry.json: Event verbosity, metrics toggles, sampling
+Config Loader
+
+Create backend/app/core/config_loader.py:
+Load and validate all JSON configs against Pydantic schemas
+Support runtime overrides (bounded by server policy)
+Config snapshot generation per run for deterministic replay
+Example Judge Profile:
+
+
+{
+  "strict_insurance": {
+    "checks": {
+      "citation_coverage": {"enabled": true, "threshold": 0.9, "hard_fail": true},
+      "groundedness": {"enabled": true, "threshold": 0.85, "hard_fail": true},
+      "hallucination": {"enabled": true, "threshold": 0.15, "hard_fail": true},
+      "relevance": {"enabled": true, "threshold": 0.7, "hard_fail": false},
+      "consistency": {"enabled": true, "threshold": 0.8, "hard_fail": false},
+      "toxicity": {"enabled": true, "threshold": 0.1, "hard_fail": true},
+      "pii_leakage": {"enabled": true, "threshold": 0.0, "hard_fail": true},
+      "bias": {"enabled": true, "threshold": 0.2, "hard_fail": true},
+      "contradiction": {"enabled": true, "threshold": 0.15, "hard_fail": true}
+    }
+  }
+}
+Phase 3: Storage Adapters
+Goal: Implement file-based storage for documents, vectors, and graphs
+
+Document Store (backend/app/adapters/file_doc_store.py)
+
+File layout:
+data/docs/index.json: Document catalog
+data/docs/{doc_id}.json: Full document with pages
+data/chunks/{doc_id}.jsonl: Chunks per document
+Implement atomic writes with file locking
+Support metadata filtering (doc_type, state, form_number)
+Vector Store (backend/app/adapters/faiss_vector_store.py)
+
+File layout:
+data/vectors/index.faiss: FAISS index
+data/vectors/chunk_meta.jsonl: chunk_id → metadata mapping
+Use faiss.IndexFlatL2 for exact search
+Maintain index position → chunk_id mapping
+Support k-NN search with similarity threshold
+Implement save/load index persistence
+Graph Store (backend/app/adapters/networkx_graph_store.py)
+
+File layout:
+data/graph/nodes.jsonl: All nodes with types and properties
+data/graph/edges.jsonl: All edges with relationship types
+Use networkx.MultiDiGraph for typed edges
+Node attributes: {type, label, properties, chunk_ids}
+Edge attributes: {type, properties, evidence_chunk_ids}
+Implement BFS-based hop-limited subgraph extraction
+Support entity linking to supporting chunks
+Phase 4: LLM Integration & PDF Pipeline
+Goal: OpenAI integration and document processing
+
+OpenAI Adapter (backend/app/adapters/openai_adapter.py)
+
+Implement structured generation with JSON mode
+Implement batch embedding generation
+Add retry logic with exponential backoff (rate limits, 429/500 errors)
+Token counting with tiktoken
+Cost tracking per operation
+Timeout enforcement
+PDF Ingestion (backend/app/modules/pdf_ingestion.py)
+
+Use pdfplumber for page-aware text extraction
+Extract metadata: form numbers, effective dates, doc type
+Store pages as array: [{page_no, text, char_count}]
+Handle malformed PDFs gracefully
+Chunking Module (backend/app/modules/chunking.py)
+
+Page-aware chunking with configurable size/overlap
+Preserve page provenance per chunk
+Token estimation with tiktoken
+Metadata propagation to chunks
+Support sentence-aware splitting
+Graph Extraction (backend/app/modules/graph_extraction.py)
+
+LLM-based entity extraction with structured prompts
+Insurance-specific entity types: Coverage, Exclusion, Condition, Endorsement, Form, Definition, State, Term
+Relationship types: AMENDS, EXCLUDES, SUBJECT_TO, APPLIES_IN, REFERENCES, DEFINES
+Provenance tracking: chunk_id + page_no per entity/relationship
+Schema validation for extracted JSON
+Phase 5: Retrieval & Fusion
+Goal: Tri-modal retrieval with weighted fusion
+
+Vector Retrieval (backend/app/modules/vector_retrieval.py)
+
+Query embedding generation
+FAISS k-NN search with similarity threshold
+Metadata filtering
+Diversity constraints (max per document)
+Document Retrieval (backend/app/modules/doc_retrieval.py)
+
+TF-IDF scoring for keyword matching
+Exact match boosting for: form numbers, clause IDs, defined terms
+BM25-style ranking
+Metadata filtering
+Graph Retrieval (backend/app/modules/graph_retrieval.py)
+
+Entity linking: query → graph entities (LLM + fuzzy match)
+Hop-limited expansion (BFS, configurable max_hops)
+Supporting chunk extraction from subgraph nodes/edges
+Relevance scoring by graph centrality
+Fusion & Reranking (backend/app/modules/fusion.py)
+
+Weighted Reciprocal Rank Fusion (RRF):
+RRF_score = sum(weight_modality / (60 + rank_in_modality))
+Diversity constraints: max N chunks per doc, min M distinct docs
+Near-duplicate removal (cosine similarity > 0.95)
+Optional LLM reranking (bounded by budget)
+Phase 6: Context Compilation & Generation
+Goal: Token-aware context building and structured answer generation
+
+Context Compiler (backend/app/modules/context_compiler.py)
+
+Token budget enforcement (strict)
+Citation-first packing: include provenance inline
+Chunk ordering by fusion rank
+Generate ContextPack artifact:
+context_text: Exact string for generation
+chunks: List with tokens per chunk
+coverage: Query facets → evidence mapping
+redactions_applied: PII redaction log
+Algorithm:
+
+1. Sort fused chunks by rank
+2. For each chunk (in order):
+   a. Calculate tokens (chunk + citation metadata)
+   b. If total_tokens + chunk_tokens <= budget:
+      - Add to context
+      - Update counter
+   c. Else: stop
+3. Generate coverage report
+Answer Generation (backend/app/modules/generation.py)
+
+Structured JSON output with OpenAI JSON mode
+Output schema (enforced):
+
+{
+  "answer": "string",
+  "citations": [{"chunk_id", "doc_id", "page_no", "quote", "reason"}],
+  "assumptions": ["..."],
+  "limitations": ["..."],
+  "confidence": "low|medium|high"
+}
+Citation validation: all citations exist in context
+Retry on schema validation failure
+Phase 7: Judge/Validation Gate (CRITICAL)
+Goal: Implement all 9 mandatory validation checks
+
+File: backend/app/modules/judge/orchestrator.py
+
+Judge Orchestrator
+
+Execute all enabled checks in parallel where possible
+Compile comprehensive JudgeReport
+Determine decision: PASS | FAIL_BLOCKED | FAIL_RETRYABLE
+Generate remediation recommendations
+Individual Checks (in backend/app/modules/judge/checks/)
+
+a) Citation Coverage (citation_coverage.py)
+
+Deterministic: count claims with citations
+Metric: % of factual claims backed by citations
+Hard fail if below threshold
+b) Groundedness (groundedness.py)
+
+LLM-based: for each claim, does evidence entail it?
+Output: claim → evidence mapping with grounded (true/false)
+Hard fail if any claims are ungrounded
+c) Hallucination Detection (hallucination.py)
+
+Detect claims/entities/numbers not in evidence
+Compare extracted entities from answer vs. context
+Flag fabrications
+d) Context Relevance (relevance.py)
+
+LLM-based: does answer address query?
+Score query-answer alignment (0-1)
+e) Consistency (consistency.py)
+
+Internal consistency: check for contradictions within answer
+Optional: multi-sample variance (generate 2-3 times, compare)
+f) Toxicity (toxicity.py)
+
+LLM rubric for toxic/offensive language
+Hard fail for severe toxicity
+g) PII Leakage (pii.py)
+
+Regex patterns: SSN, phone, email, address, DOB
+LLM verification for ambiguous cases
+Hard fail if PII detected and policy forbids
+h) Bias Detection (bias.py)
+
+LLM rubric for biased/discriminatory language
+Detect unfair assumptions in insurance context
+i) Contradiction Detection (contradiction.py)
+
+Answer vs. evidence contradictions
+Internal contradictions in answer
+Judge Report Compilation
+
+Aggregate scores from all checks
+Identify violations (score < threshold)
+Determine severity (hard_fail → high, else medium)
+Decision logic: any hard-fail violation → FAIL_BLOCKED
+Generate remediation: specific guidance per violation
+Critical File: backend/app/modules/judge/orchestrator.py
+
+Phase 8: Orchestration & API
+Goal: Coordinate pipeline and expose REST API
+
+Run Orchestrator (backend/app/core/orchestrator.py)
+
+Coordinate entire pipeline with event emission:
+
+retrieval_started → vector/doc/graph → fusion_completed
+→ context_compiled → generation_completed → judge_completed
+→ run_completed|run_blocked
+Persist artifacts per run:
+data/runs/{run_id}/events.jsonl
+data/runs/{run_id}/artifacts/retrieval_bundle.json
+data/runs/{run_id}/artifacts/context_pack.json
+data/runs/{run_id}/artifacts/answer.json
+data/runs/{run_id}/artifacts/judge_report.json
+data/runs/{run_id}/artifacts/config_snapshot.json
+Error handling and recovery
+Timeout enforcement per step
+FastAPI Routes (backend/app/api/)
+
+Ingestion:
+POST /api/ingest/pdf: Upload PDF, returns doc_id
+POST /api/index/{doc_id}: Trigger chunking + embeddings + graph extraction
+Execution:
+POST /api/run: Execute RAG pipeline, returns run_id
+GET /api/run/{run_id}/events: SSE stream (live or replay)
+GET /api/run/{run_id}/artifact/{name}: Download artifact
+Library:
+GET /api/runs: List runs with filters
+GET /api/runs/{run_id}: Get run metadata
+Configuration:
+GET /api/config/profiles: List all profile IDs
+GET /api/config/profile/{type}/{id}: Get specific profile
+Documents:
+GET /api/docs: List indexed documents
+GET /api/docs/{doc_id}: Get document metadata
+DELETE /api/docs/{doc_id}: Remove document
+SSE Event Streaming (backend/app/api/sse.py)
+
+Support live streaming during run execution
+Support replay from persisted events.jsonl
+Event format: data: {json}\n\n
+Close stream on run_completed or run_failed
+Critical File: backend/app/core/orchestrator.py
+
+Phase 9: Frontend (Multi-Tab Executive UI)
+Goal: Build transparent, observable interface
+
+Structure: Next.js App Router with 9 tabs
+
+Tab 1: Run Console (frontend/components/tabs/RunConsole.tsx)
+
+Query input (textarea)
+Profile selectors (dropdowns): workflow, retrieval, context, judge
+Optional overrides: k, max_hops, max_context_tokens
+Run button → POST /api/run → open SSE stream
+Tab 2: Timeline (frontend/components/tabs/Timeline.tsx)
+
+SSE connection to /api/run/{run_id}/events
+Event list with timestamps, durations, status badges
+Expandable event payload view
+Progress bar showing current step
+Token/cost summary per step
+Tab 3: Retrieval Explorer (frontend/components/tabs/RetrievalExplorer.tsx)
+
+Sub-tabs: Vector | Document | Graph | Fused
+Show ranked results with scores and provenance
+Expandable chunk text preview
+Fusion rationale ("Why selected")
+Tab 4: Graph Viewer (frontend/components/tabs/GraphViewer.tsx)
+
+D3.js or react-force-graph visualization
+Node types color-coded, edge types labeled
+Click node/edge → show supporting chunks
+Query entities highlighted
+Tab 5: Context Pack (frontend/components/tabs/ContextPack.tsx)
+
+Exact context text (monospace)
+Token budget visualization (used vs. available)
+Chunk list with ranks and token counts
+Coverage indicators (query facets → evidence)
+Tab 6: Answer (frontend/components/tabs/Answer.tsx)
+
+Rendered answer with inline citations [1], [2]
+Click citation → modal with chunk text + page preview
+Assumptions, limitations, confidence badge
+Tab 7: Judge Report (frontend/components/tabs/JudgeReport.tsx)
+
+Overall decision badge (PASS/FAIL_BLOCKED)
+Scorecard grid: 9 checks with scores/thresholds/status
+Violations list with severity
+Claim-evidence mapping table
+Remediation recommendations
+Blocked response UI if failed
+Tab 8: Observability (frontend/components/tabs/Observability.tsx)
+
+Token usage charts (per step breakdown)
+Cost analytics (per step + total)
+Latency charts (step durations)
+Export run bundle button (download ZIP)
+Tab 9: Runs Library (frontend/components/tabs/RunsLibrary.tsx)
+
+Searchable run list with filters (date, status, profile)
+Run cards: run_id, query, timestamp, status
+Click run → load replay
+Shared Components:
+
+SSE hook for live updates (frontend/lib/use-sse.ts)
+API client (frontend/lib/api-client.ts)
+UI components: cards, badges, modals, charts
+Phase 10: Sample Data & Configuration
+Goal: Production-ready examples
+
+Sample Insurance PDFs (in sample_data/pdfs/)
+
+Home insurance policy form (base document)
+Water backup endorsement (amends base)
+Exclusions document (references base)
+Create realistic metadata: form numbers, effective dates, states
+Default Configuration Profiles (in /config/)
+
+All 8 JSON config files with sensible defaults
+Add inline comments explaining each setting
+Create "strict" and "balanced" variants for key profiles
+Documentation
+
+README.md: Overview, setup, Docker commands, API reference
+ARCHITECTURE.md: Design decisions, adapter pattern, event sourcing
+Include demo flow: upload PDF → index → query → observe results
+Phase 11: Testing & Validation
+Goal: Ensure correctness and reliability
+
+Backend Unit Tests (backend/tests/)
+
+Adapter interfaces with mocks
+Chunking logic (page boundaries, overlap, tokens)
+RRF fusion algorithm
+Each judge check individually
+Configuration loading and validation
+Target: 80%+ coverage
+Integration Tests
+
+End-to-end: PDF upload → indexing → retrieval → generation → judge
+Judge blocking behavior (simulate hard-fail scenarios)
+SSE streaming (live and replay)
+Artifact persistence and retrieval
+Frontend Tests
+
+Component rendering (Jest + React Testing Library)
+SSE connection handling
+API error handling
+Tab navigation
+Phase 12: Finalization
+Goal: Production readiness
+
+Error Handling
+
+Comprehensive error messages throughout
+Graceful degradation for non-critical failures
+Timeout recovery strategies
+Health check endpoints
+Security
+
+Input validation: file size limits, content type checks
+File upload sanitization
+Rate limiting on API endpoints
+CORS configuration
+API key validation
+Performance
+
+FAISS index loading optimization
+Embedding caching
+Graph query optimization
+Frontend code splitting
+Lazy loading for large artifacts
+Demo Preparation
+
+Demo script with sample queries
+Test full flow end-to-end
+Verify all 9 judge checks work correctly
+Critical Files Summary
+Core Architecture (Phase 1):
+
+backend/app/adapters/base.py - Interface definitions
+backend/app/core/models.py - Pydantic data contracts
+docker-compose.yml - Container orchestration
+.env - Environment configuration
+Pipeline Orchestration (Phase 8):
+
+backend/app/core/orchestrator.py - Main RAG pipeline coordinator
+Quality Gate (Phase 7):
+
+backend/app/modules/judge/orchestrator.py - Judge with 9 validation checks
+config/judge_profiles.json - Judge thresholds and hard-fail rules
+Storage (Phase 3):
+
+backend/app/adapters/file_doc_store.py - Document/chunk storage
+backend/app/adapters/faiss_vector_store.py - Vector search
+backend/app/adapters/networkx_graph_store.py - Graph storage and traversal
+Retrieval (Phase 5):
+
+backend/app/modules/fusion.py - Weighted RRF across modalities
+API (Phase 8):
+
+backend/app/main.py - FastAPI application entry point
+backend/app/api/run.py - Run execution and SSE streaming
+Verification Plan
+End-to-End Demo Flow
+Start Services:
+
+
+docker-compose up --build
+Verify backend at http://localhost:8017
+Verify frontend at http://localhost:3017
+Check hot reload by modifying a file
+Upload Sample PDF:
+
+
+curl -X POST -F "file=@sample_data/pdfs/home_policy.pdf" \
+  http://localhost:8017/api/ingest/pdf
+Verify doc_id returned
+Check data/docs/{doc_id}.json created
+Index Document:
+
+
+curl -X POST http://localhost:8017/api/index/{doc_id}
+Verify chunking: data/chunks/{doc_id}.jsonl exists
+Verify embeddings: data/vectors/index.faiss created
+Verify graph: data/graph/nodes.jsonl and edges.jsonl populated
+Execute RAG Query:
+
+
+curl -X POST http://localhost:8017/api/run \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "Is water backup covered under this policy?",
+    "workflow_id": "default_insurance_workflow",
+    "retrieval_profile_id": "balanced_insurance",
+    "context_profile_id": "default",
+    "judge_profile_id": "strict_insurance"
+  }'
+Verify run_id returned
+Open SSE stream: http://localhost:8017/api/run/{run_id}/events
+Check events flow through pipeline
+Verify Artifacts:
+
+Check data/runs/{run_id}/events.jsonl contains all events
+Check data/runs/{run_id}/artifacts/ contains:
+retrieval_bundle.json (vector + doc + graph results)
+context_pack.json (compiled context with token breakdown)
+answer.json (structured answer with citations)
+judge_report.json (9 check scores + decision)
+config_snapshot.json (configs used for replay)
+Frontend Verification:
+
+Open http://localhost:3017
+Navigate through all 9 tabs
+Verify Timeline shows events with durations
+Verify Retrieval Explorer shows results from all 3 modalities
+Verify Graph Viewer renders subgraph
+Verify Context Pack shows token budget usage
+Verify Answer renders with clickable citations
+Verify Judge Report shows all 9 check scores
+Verify Observability shows cost/token analytics
+Judge Blocking Test:
+
+Modify judge profile to set stricter thresholds
+Run query that should fail (e.g., insufficient citations)
+Verify answer is blocked
+Verify Judge Report shows violations and remediation
+Verify frontend displays blocked state
+Replay Test:
+
+Navigate to Runs Library tab
+Select a past run
+Verify replay loads all artifacts
+Verify Timeline replays events
+Verify all tabs show historical data
+Success Criteria
+✅ All services start with docker-compose up
+✅ Hot reload works for both frontend and backend
+✅ PDF ingestion extracts text by page
+✅ Indexing creates chunks, embeddings, and graph
+✅ Retrieval returns results from all 3 modalities (vector, doc, graph)
+✅ Fusion produces ranked list with diversity constraints
+✅ Context compilation respects token budget
+✅ Answer generation includes citations with provenance
+✅ All 9 judge checks execute and produce scores
+✅ Hard-fail violations block answer release
+✅ SSE streams events in real-time
+✅ Artifacts persist and enable deterministic replay
+✅ Frontend displays all pipeline stages with transparency
+✅ Configuration changes (JSON edits) affect behavior without code changes
+Implementation Notes
+Architectural Patterns
+Adapter Pattern: All external dependencies behind interfaces for testability and swappability
+Registry Pattern: JSON configs control all behavior, no code changes for tuning
+Artifact-First: Every run produces complete audit trail for replay and governance
+Event Sourcing (lite): Events are first-class citizens for observability
+Fail-Closed Safety: Judge gate blocks answers unless validated
+Key Design Decisions
+File-based storage: Eliminates database dependency, simplifies deployment
+NetworkX + FAISS: Production-capable libraries with file persistence
+OpenAI-only: Single LLM provider simplifies implementation (adapters enable future swap)
+SSE for streaming: Simple, reliable, works everywhere (vs WebSockets)
+9 mandatory judge checks: Comprehensive quality gate covering all critical dimensions
+Performance Considerations
+Parallel judge checks where possible
+Batch embedding generation
+FAISS IndexFlatL2 (exact search, can upgrade to IVFFlat for scale)
+Graph query hop limits prevent explosion
+Token budget prevents context overflow
+Rate limiting and retry logic for OpenAI API
+Security & Governance
+PII detection and redaction
+Input validation (file size, content type)
+Fail-closed by default
+Complete audit trail via artifacts
+Configurable quality thresholds per environment

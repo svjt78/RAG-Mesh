@@ -1,0 +1,15 @@
+{
+  "description": "LLM reranking configurations for reordering fused results",
+  "profiles": {
+    "default": {
+      "description": "Baseline LLM reranking profile",
+      "enabled": false,
+      "model": "gpt-3.5-turbo",
+      "max_chunks": 20,
+      "chunk_char_limit": 500,
+      "temperature": 0.0,
+      "prompt_template": "Given the query and the following chunks, rank them by relevance.\nOutput only the ranking as a JSON array of chunk numbers in order of relevance.\n\nQuery: {query}\n\nChunks:\n{chunks}\n\nOutput format: {\"ranking\": [3, 1, 5, 2, 4, ...]}"
+    }
+  },
+  "default_profile": "default"
+}
