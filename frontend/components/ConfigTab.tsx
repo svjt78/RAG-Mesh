@@ -12,6 +12,7 @@ import { FusionProfileEditor } from './FusionProfileEditor';
 import { RerankProfileEditor } from './RerankProfileEditor';
 import { ContextProfileEditor } from './ContextProfileEditor';
 import { JudgeProfileEditor } from './JudgeProfileEditor';
+import { ChatProfileEditor } from './ChatProfileEditor';
 
 export function ConfigTab() {
   const [profiles, setProfiles] = useState<any>(null);
@@ -25,6 +26,7 @@ export function ConfigTab() {
   const [editingRerankProfile, setEditingRerankProfile] = useState<string | null>(null);
   const [editingContextProfile, setEditingContextProfile] = useState<string | null>(null);
   const [editingJudgeProfile, setEditingJudgeProfile] = useState<string | null>(null);
+  const [editingChatProfile, setEditingChatProfile] = useState<string | null>(null);
   const [viewingProfile, setViewingProfile] = useState<{ id: string; type: string } | null>(null);
   const [promptData, setPromptData] = useState<any>(null);
   const [promptLoading, setPromptLoading] = useState(false);
@@ -140,6 +142,12 @@ export function ConfigTab() {
     alert('Judge profile saved successfully');
   };
 
+  const handleChatProfileSaved = async () => {
+    setEditingChatProfile(null);
+    await loadProfiles();
+    alert('Chat profile saved successfully');
+  };
+
   if (loading) {
     return (
       <div className="text-center py-12 text-gray-500">
@@ -173,6 +181,7 @@ export function ConfigTab() {
     { id: 'context', label: 'Context', count: profiles?.context?.length || 0 },
     { id: 'generation', label: 'Generation', count: profiles?.prompts?.length || 0 },
     { id: 'judge', label: 'Judge', count: profiles?.judge?.length || 0 },
+    { id: 'chat', label: 'Chat', count: profiles?.chat?.length || 0 },
   ];
 
   const updateGenerationPrompt = (value: string) => {
@@ -348,14 +357,16 @@ export function ConfigTab() {
                       setEditingContextProfile(profileId);
                     } else if (activeSection === 'judge') {
                       setEditingJudgeProfile(profileId);
+                    } else if (activeSection === 'chat') {
+                      setEditingChatProfile(profileId);
                     } else {
                       setViewingProfile({ id: profileId, type: activeSection });
                     }
                   }}
                   className="px-3 py-1 text-xs bg-gray-100 text-black rounded hover:bg-gray-200"
-                  title={['workflows', 'chunking', 'retrieval', 'fusion', 'reranking', 'context', 'judge'].includes(activeSection) ? 'Edit configuration with detailed field explanations' : 'View detailed configuration settings for this profile'}
+                  title={['workflows', 'chunking', 'retrieval', 'fusion', 'reranking', 'context', 'judge', 'chat'].includes(activeSection) ? 'Edit configuration with detailed field explanations' : 'View detailed configuration settings for this profile'}
                 >
-                  {['workflows', 'chunking', 'retrieval', 'fusion', 'reranking', 'context', 'judge'].includes(activeSection) ? 'Edit' : 'View Details'}
+                  {['workflows', 'chunking', 'retrieval', 'fusion', 'reranking', 'context', 'judge', 'chat'].includes(activeSection) ? 'Edit' : 'View Details'}
                 </button>
               </div>
             </div>
@@ -439,6 +450,15 @@ export function ConfigTab() {
           profileId={editingJudgeProfile}
           onClose={() => setEditingJudgeProfile(null)}
           onSave={handleJudgeProfileSaved}
+        />
+      )}
+
+      {/* Chat Profile Editor Modal */}
+      {editingChatProfile && (
+        <ChatProfileEditor
+          profileId={editingChatProfile}
+          onClose={() => setEditingChatProfile(null)}
+          onSave={handleChatProfileSaved}
         />
       )}
 

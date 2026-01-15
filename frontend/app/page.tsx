@@ -93,6 +93,9 @@ export default function Home() {
             status: data.status,
             artifacts: data.artifacts || {},
             events: data.events || [],
+            session_id: data.session_id,
+            turn_number: data.turn_number,
+            history_compacted: data.history_compacted,
           });
           setIsStreaming(false);
           return;
@@ -118,6 +121,9 @@ export default function Home() {
         status: data.status,
         artifacts: data.artifacts || {},
         events: data.events || [],
+        session_id: data.session_id,
+        turn_number: data.turn_number,
+        history_compacted: data.history_compacted,
       });
     } catch (err) {
       console.error("Error loading run data:", err);

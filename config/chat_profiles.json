@@ -1,0 +1,36 @@
+{
+  "description": "Chat mode configurations for RAGMesh",
+  "profiles": {
+    "default": {
+      "description": "Standard chat configuration with balanced history management",
+      "compaction_threshold_tokens": 2000,
+      "max_history_turns": 10,
+      "summarization_model": "gpt-3.5-turbo",
+      "summarization_max_tokens": 500,
+      "include_summary_in_context": true,
+      "summary_position": "before_retrieval",
+      "reserve_tokens_for_history": 800
+    },
+    "long_context": {
+      "description": "Extended chat history support for longer conversations",
+      "compaction_threshold_tokens": 4000,
+      "max_history_turns": 20,
+      "summarization_model": "gpt-3.5-turbo",
+      "summarization_max_tokens": 800,
+      "include_summary_in_context": true,
+      "summary_position": "before_retrieval",
+      "reserve_tokens_for_history": 1500
+    },
+    "compact": {
+      "description": "Minimal chat history for token-constrained scenarios",
+      "compaction_threshold_tokens": 1000,
+      "max_history_turns": 5,
+      "summarization_model": "gpt-3.5-turbo",
+      "summarization_max_tokens": 300,
+      "include_summary_in_context": true,
+      "summary_position": "before_retrieval",
+      "reserve_tokens_for_history": 500
+    }
+  },
+  "default_profile": "default"
+}

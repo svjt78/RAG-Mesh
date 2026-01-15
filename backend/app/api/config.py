@@ -686,6 +686,89 @@ async def update_prompts(prompts_data: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/config/chat")
+async def list_chat_profiles():
+    """
+    List available chat profiles
+
+    Returns:
+        Chat profile IDs and descriptions
+    """
+    logger.info("Listing chat profiles")
+
+    try:
+        profiles = config_loader.config["chat_profiles"]["profiles"]
+        return {
+            "profiles": [
+                {
+                    "profile_id": profile_id,
+                    "description": profile.get("description", ""),
+                    "compaction_threshold_tokens": profile.get("compaction_threshold_tokens", 0),
+                    "max_history_turns": profile.get("max_history_turns", 0)
+                }
+                for profile_id, profile in profiles.items()
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Error listing chat profiles: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/config/chat/{profile_id}")
+async def get_chat_profile(profile_id: str):
+    """
+    Get a specific chat profile
+
+    Args:
+        profile_id: Chat profile ID
+
+    Returns:
+        Chat configuration
+    """
+    logger.info(f"Getting chat profile: {profile_id}")
+
+    try:
+        profile = config_loader.get_chat_profile(profile_id)
+        return {"profile": profile.model_dump()}
+
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Chat profile not found: {profile_id}")
+    except Exception as e:
+        logger.error(f"Error getting chat profile: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/config/chat/{profile_id}")
+async def update_chat_profile(profile_id: str, profile_data: dict):
+    """
+    Update a chat profile configuration
+
+    Args:
+        profile_id: Chat profile ID
+        profile_data: Updated chat profile configuration
+
+    Returns:
+        Updated chat profile configuration
+    """
+    logger.info(f"Updating chat profile: {profile_id}")
+
+    try:
+        config_loader.save_chat_profile(profile_id, profile_data)
+        updated_profile = config_loader.get_chat_profile(profile_id)
+        return {
+            "status": "updated",
+            "profile_id": profile_id,
+            "profile": updated_profile.model_dump()
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating chat profile: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/config/reload")
 async def reload_config():
     """

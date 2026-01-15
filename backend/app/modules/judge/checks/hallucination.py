@@ -47,13 +47,13 @@ Score 0.0 = severe hallucinations, 1.0 = no hallucinations"""
             )
 
             result = json.loads(response["content"])
-            # Invert score: fewer hallucinations = higher score
-            score = 1.0 - result.get("hallucination_score", 0.5)
+            # LLM returns score where 1.0 = no hallucinations, 0.0 = severe hallucinations
+            score = result.get("hallucination_score", 0.5)
 
             return {
                 "score": score,
                 "details": {"hallucinations": result.get("hallucinations", [])},
-                "message": f"Hallucination score: {score:.2f} (lower is better)"
+                "message": f"Hallucination score: {score:.2f} (higher is better)"
             }
 
         except Exception as e:

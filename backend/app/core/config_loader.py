@@ -17,6 +17,7 @@ from app.core.models import (
     RerankProfile,
     ContextProfile,
     JudgeProfile,
+    ChatProfile,
     WorkflowProfile,
     TelemetryConfig,
     CheckConfig,
@@ -82,6 +83,7 @@ class ConfigLoader:
             "reranking_profiles": self._load_json("reranking_profiles.json"),
             "context_profiles": self._load_json("context_profiles.json"),
             "judge_profiles": self._load_json("judge_profiles.json"),
+            "chat_profiles": self._load_json("chat_profiles.json"),
             "telemetry": self._load_json("telemetry.json"),
             "prompts": self._load_json("prompts.json"),
         }
@@ -222,6 +224,23 @@ class ConfigLoader:
 
         return judge_profile
 
+    def get_chat_profile(self, profile_id: str = "default") -> ChatProfile:
+        """
+        Get a validated chat profile
+
+        Args:
+            profile_id: Profile identifier
+
+        Returns:
+            Validated ChatProfile
+        """
+        profiles = self.configs["chat_profiles"]["profiles"]
+        if profile_id not in profiles:
+            logger.warning(f"Chat profile '{profile_id}' not found, using default")
+            profile_id = self.configs["chat_profiles"]["default_profile"]
+
+        return ChatProfile(**profiles[profile_id])
+
     def get_workflow_profile(self, workflow_id: str = "default_workflow") -> WorkflowProfile:
         """
         Get a validated workflow profile
@@ -334,6 +353,7 @@ class ConfigLoader:
             "reranking": list(self.configs["reranking_profiles"]["profiles"].keys()),
             "context": list(self.configs["context_profiles"]["profiles"].keys()),
             "judge": list(self.configs["judge_profiles"]["profiles"].keys()),
+            "chat": list(self.configs["chat_profiles"]["profiles"].keys()),
             "workflows": list(self.configs["workflows"]["workflows"].keys()),
             "prompts": ["generation"],
         }
@@ -579,6 +599,37 @@ class ConfigLoader:
             logger.info("Saved prompt configuration")
         except Exception as e:
             logger.error(f"Failed to save prompt configuration: {e}")
+            raise
+
+    def save_chat_profile(self, profile_id: str, profile_data: Dict[str, Any]) -> None:
+        """
+        Save or update a chat profile configuration
+
+        Args:
+            profile_id: Chat profile identifier
+            profile_data: Chat profile configuration data
+
+        Raises:
+            ValueError: If profile data is invalid
+        """
+        # Validate using Pydantic model
+        try:
+            validated_profile = ChatProfile(**profile_data)
+        except Exception as e:
+            logger.error(f"Invalid chat profile data: {e}")
+            raise ValueError(f"Invalid chat profile configuration: {e}")
+
+        # Update in-memory config
+        self.configs["chat_profiles"]["profiles"][profile_id] = validated_profile.model_dump()
+
+        # Save to file
+        file_path = self.config_dir / "chat_profiles.json"
+        try:
+            with open(file_path, 'w') as f:
+                json.dump(self.configs["chat_profiles"], f, indent=2)
+            logger.info(f"Saved chat profile configuration: {profile_id}")
+        except Exception as e:
+            logger.error(f"Failed to save chat profile configuration: {e}")
             raise
 
     def reload(self) -> None:

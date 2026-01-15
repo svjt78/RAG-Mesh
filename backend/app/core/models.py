@@ -239,6 +239,39 @@ class JudgeReport(BaseModel):
 
 
 # ============================================================================
+# Chat Models
+# ============================================================================
+
+class ChatTurn(BaseModel):
+    """Single turn in a chat conversation"""
+    turn_number: int = Field(..., ge=1, description="Turn number in conversation")
+    query: str = Field(..., description="User query")
+    answer: Answer = Field(..., description="Generated answer")
+    run_id: str = Field(..., description="Associated run ID")
+    timestamp: datetime = Field(default_factory=datetime.now)
+    tokens: int = Field(..., ge=0, description="Total tokens used in this turn")
+
+
+class ChatHistory(BaseModel):
+    """Chat conversation history"""
+    turns: List[ChatTurn] = Field(default_factory=list, description="List of conversation turns")
+    summary: Optional[str] = Field(None, description="LLM-generated summary of older turns")
+    summary_covers_turns: List[int] = Field(default_factory=list, description="Turn numbers included in summary")
+    total_turns: int = Field(default=0, ge=0, description="Total number of turns")
+
+
+class ChatSession(BaseModel):
+    """Complete chat session state"""
+    session_id: str = Field(..., description="Unique session identifier")
+    history: ChatHistory = Field(default_factory=ChatHistory, description="Conversation history")
+    created_at: datetime = Field(default_factory=datetime.now)
+    last_updated: datetime = Field(default_factory=datetime.now)
+    total_tokens: int = Field(default=0, ge=0, description="Cumulative tokens across all turns")
+    workflow_id: str = Field(default="default_workflow")
+    chat_profile_id: str = Field(default="default")
+
+
+# ============================================================================
 # Event Models
 # ============================================================================
 
@@ -258,6 +291,10 @@ class EventType(str, Enum):
     RUN_COMPLETED = "run_completed"
     RUN_BLOCKED = "run_blocked"
     RUN_FAILED = "run_failed"
+    CHAT_SESSION_CREATED = "chat_session_created"
+    CHAT_COMPACTED = "chat_compacted"
+    CHAT_TURN_ADDED = "chat_turn_added"
+    CHAT_SESSION_TERMINATED = "chat_session_terminated"
 
 
 class Event(BaseModel):
@@ -384,6 +421,18 @@ class JudgeProfile(BaseModel):
     contradiction: CheckConfig
 
 
+class ChatProfile(BaseModel):
+    """Chat mode configuration"""
+    description: str = Field(default="Chat configuration")
+    compaction_threshold_tokens: int = Field(default=2000, ge=500, description="Trigger compaction when history exceeds this")
+    max_history_turns: int = Field(default=10, ge=1, description="Maximum turns to keep uncompacted")
+    summarization_model: str = Field(default="gpt-3.5-turbo", description="Model for summarization")
+    summarization_max_tokens: int = Field(default=500, ge=100, description="Max tokens for summary")
+    include_summary_in_context: bool = Field(default=True, description="Include summary in context")
+    summary_position: str = Field(default="before_retrieval", description="Position: before_retrieval or after_retrieval")
+    reserve_tokens_for_history: int = Field(default=800, ge=0, description="Token budget reserved for chat history")
+
+
 class WorkflowProfile(BaseModel):
     """Complete workflow configuration"""
     workflow_id: str = Field(..., description="Workflow identifier")
@@ -447,6 +496,10 @@ class RunRequest(BaseModel):
     judge_profile_id: str = Field(default="strict_insurance")
     doc_filter: Optional[Dict[str, Any]] = Field(default=None)
     overrides: Dict[str, Any] = Field(default_factory=dict, description="Runtime overrides")
+    # Chat mode fields
+    mode: Literal["query", "chat"] = Field(default="query", description="Execution mode")
+    session_id: Optional[str] = Field(None, description="Chat session ID (required for chat mode)")
+    chat_profile_id: Optional[str] = Field(default="default", description="Chat profile ID")
 
 
 class RunResponse(BaseModel):
@@ -454,3 +507,10 @@ class RunResponse(BaseModel):
     run_id: str = Field(..., description="Unique run identifier")
     status: str = Field(..., description="Run status")
     sse_endpoint: str = Field(..., description="SSE endpoint for live updates")
+    answer: Optional[Answer] = Field(None, description="Generated answer")
+    judge_report: Optional[JudgeReport] = Field(None, description="Judge validation report")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    # Chat mode fields
+    session_id: Optional[str] = Field(None, description="Chat session ID (chat mode only)")
+    turn_number: Optional[int] = Field(None, description="Turn number in chat session")
+    history_compacted: bool = Field(default=False, description="Whether compaction occurred this turn")

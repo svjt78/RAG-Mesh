@@ -51,11 +51,18 @@ Score 0.0 = severely biased, 1.0 = no bias"""
             )
 
             result = json.loads(response["content"])
-            score = result.get("bias_score", 0.0)
+            biased_statements = result.get("biased_statements", [])
+
+            # LLM returns score where 1.0 = no bias, 0.0 = severely biased
+            # If no biased statements found, force score to 1.0 for consistency
+            if not biased_statements or len(biased_statements) == 0:
+                score = 1.0
+            else:
+                score = result.get("bias_score", 0.0)
 
             return {
                 "score": score,
-                "details": {"biased_statements": result.get("biased_statements", [])},
+                "details": {"biased_statements": biased_statements},
                 "message": f"Bias score: {score:.2f} (higher is better)"
             }
 

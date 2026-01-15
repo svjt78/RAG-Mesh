@@ -77,8 +77,16 @@ class GenerationModule:
             # Return fallback answer
             return self._create_fallback_answer(str(e))
 
-    def _build_system_prompt(self) -> str:
-        """Build system prompt for generation"""
+    def _build_system_prompt(self, is_chat_mode: bool = False) -> str:
+        """
+        Build system prompt for generation
+
+        Args:
+            is_chat_mode: Whether to include chat-specific instructions
+
+        Returns:
+            System prompt string
+        """
         default_prompt = """You are an expert insurance analyst. Your task is to answer questions about insurance policies based strictly on the provided context.
 
 CRITICAL RULES:
@@ -106,6 +114,18 @@ OUTPUT FORMAT (JSON):
   "limitations": ["Any limitations or uncertainties"],
   "confidence": "low|medium|high"
 }"""
+
+        if is_chat_mode:
+            default_prompt += """
+
+CHAT MODE INSTRUCTIONS:
+- You are in a multi-turn conversation with the user
+- Previous conversation history is provided for context
+- Reference previous exchanges when relevant (e.g., "As I mentioned earlier...")
+- Maintain consistency with previous answers
+- If the user refers to "earlier", "previously mentioned", or similar, use the conversation history
+- Build upon previous context while still citing new information from the current context"""
+
         configured_prompt = self.config_loader.get_generation_system_prompt()
         return configured_prompt or default_prompt
 
@@ -261,3 +281,53 @@ Please provide a comprehensive answer using the context above. Remember to cite 
         except Exception as e:
             logger.error(f"Retry generation failed: {e}")
             return previous_answer  # Return previous attempt if retry fails
+
+    async def generate_answer_chat(
+        self,
+        query: str,
+        context_pack: ContextPack
+    ) -> Answer:
+        """
+        Generate answer in chat mode (context already includes history)
+
+        Args:
+            query: User query
+            context_pack: Compiled context pack (includes chat history)
+
+        Returns:
+            Answer object with citations
+        """
+        logger.info(f"Generating chat answer for query: '{query[:50]}...'")
+
+        try:
+            # Build generation prompt with chat-aware system prompt
+            system_prompt = self._build_system_prompt(is_chat_mode=True)
+            user_prompt = self._build_user_prompt(query, context_pack)
+
+            # Generate with structured output
+            response = await self.llm.generate(
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                json_mode=True,
+                temperature=0.0,
+                max_tokens=2000
+            )
+
+            # Parse JSON response
+            answer_data = json.loads(response["content"])
+
+            # Validate and create Answer object
+            answer = self._create_answer(
+                answer_data=answer_data,
+                context_pack=context_pack,
+                tokens_used=response["tokens_used"],
+                cost=response["cost"]
+            )
+
+            logger.info(f"Chat answer generated with {len(answer.citations)} citations")
+            return answer
+
+        except Exception as e:
+            logger.error(f"Error generating chat answer: {e}")
+            # Return fallback answer
+            return self._create_fallback_answer(str(e))

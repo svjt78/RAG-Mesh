@@ -2,9 +2,9 @@
  * Query Tab - Query input and execution
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { apiClient, RunRequest } from '@/lib/api';
-import { RunData } from '@/lib/types';
+import { RunData, ChatTurn } from '@/lib/types';
 
 interface QueryTabProps {
   onRunStart: (runId: string, query: string) => void;
@@ -19,6 +19,47 @@ export function QueryTab({ onRunStart, currentQuery, runData, isStreaming }: Que
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Chat mode state
+  const [mode, setMode] = useState<'query' | 'chat'>('query');
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [chatHistory, setChatHistory] = useState<ChatTurn[]>([]);
+
+  // Update chat history when runData changes in chat mode
+  useEffect(() => {
+    if (mode === 'chat' && runData?.session_id && runData.artifacts?.answer) {
+      const answer = runData.artifacts.answer as any;
+
+      // Check if this turn already exists in history
+      setChatHistory(prev => {
+        const alreadyExists = prev.some(t => t.run_id === runData.run_id);
+        if (alreadyExists) {
+          return prev; // Don't add duplicates
+        }
+
+        const newTurn: ChatTurn = {
+          turn_number: runData.turn_number || prev.length + 1,
+          query: currentQuery,
+          answer: answer,
+          run_id: runData.run_id,
+          timestamp: new Date().toISOString(),
+          tokens: 0, // Not tracking tokens on frontend
+        };
+
+        return [...prev, newTurn];
+      });
+    }
+  }, [runData, mode, currentQuery]);
+
+  // Handle mode switching
+  const handleModeSwitch = (newMode: 'query' | 'chat') => {
+    setMode(newMode);
+    if (newMode === 'query') {
+      // Clear chat state when switching back to query mode
+      setSessionId(null);
+      setChatHistory([]);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -28,12 +69,30 @@ export function QueryTab({ onRunStart, currentQuery, runData, isStreaming }: Que
       const request: RunRequest = {
         query: query.trim(),
         workflow_id: workflowId,
+        mode: mode,
+        session_id: mode === 'chat' ? sessionId || undefined : undefined,
+        chat_profile_id: mode === 'chat' ? 'default' : undefined,
       };
 
       const response = await apiClient.executeRun(request);
+
+      // Handle session termination (user typed "quit")
+      if (response.status === 'terminated') {
+        setSessionId(null);
+        setChatHistory([]);
+        setQuery('');
+        setError('Chat session ended.');
+        return;
+      }
+
+      // Store session_id for chat mode
+      if (mode === 'chat' && response.session_id) {
+        setSessionId(response.session_id);
+      }
+
       onRunStart(response.run_id, query);
 
-      // Clear form
+      // Clear input
       setQuery('');
     } catch (err: any) {
       setError(err.message || 'Failed to execute query');
@@ -60,6 +119,105 @@ export function QueryTab({ onRunStart, currentQuery, runData, isStreaming }: Que
         </p>
       </div>
 
+      {/* Mode Toggle */}
+      <div className="flex gap-2 bg-gray-100 p-1 rounded-lg w-fit">
+        <button
+          type="button"
+          onClick={() => handleModeSwitch('query')}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            mode === 'query'
+              ? 'bg-white text-blue-600 shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+          disabled={isSubmitting}
+        >
+          Query Mode
+        </button>
+        <button
+          type="button"
+          onClick={() => handleModeSwitch('chat')}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            mode === 'chat'
+              ? 'bg-white text-blue-600 shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+          disabled={isSubmitting}
+        >
+          Chat Mode
+        </button>
+      </div>
+
+      {/* Chat History Panel (visible in chat mode) */}
+      {mode === 'chat' && (
+        <div className="border border-gray-300 rounded-lg bg-white">
+          <div className="px-4 py-3 border-b border-gray-300 bg-gray-50">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold text-gray-900">Conversation</div>
+              <div className="text-xs text-gray-500">
+                {sessionId ? (
+                  <>Session: {sessionId.slice(0, 8)}... • {chatHistory.length} turn{chatHistory.length !== 1 ? 's' : ''}</>
+                ) : (
+                  'No active session'
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="p-4 max-h-[500px] overflow-y-auto space-y-4">
+            {chatHistory.length === 0 ? (
+              <div className="text-sm text-gray-500 text-center py-8">
+                Start a conversation by asking a question below...
+              </div>
+            ) : (
+              chatHistory.map((turn, idx) => (
+                <div key={turn.run_id} className="space-y-3">
+                  {/* User Question */}
+                  <div className="flex justify-end">
+                    <div className="bg-blue-100 rounded-lg px-4 py-2 max-w-[85%]">
+                      <div className="text-xs text-blue-600 font-medium mb-1">You</div>
+                      <div className="text-sm text-gray-900">{turn.query}</div>
+                    </div>
+                  </div>
+                  {/* Assistant Answer */}
+                  <div className="flex justify-start">
+                    <div className="bg-gray-100 rounded-lg px-4 py-2 max-w-[85%]">
+                      <div className="text-xs text-gray-600 font-medium mb-1">Assistant</div>
+                      <div className="text-sm text-gray-900 whitespace-pre-wrap">
+                        {turn.answer?.answer || turn.answer?.answer_text || 'No answer'}
+                      </div>
+                      {turn.answer?.confidence && (
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-xs text-gray-500">Confidence:</span>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            turn.answer.confidence === 'high'
+                              ? 'bg-green-100 text-green-800'
+                              : turn.answer.confidence === 'medium'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-red-100 text-red-800'
+                          }`}>
+                            {String(turn.answer.confidence).charAt(0).toUpperCase() + String(turn.answer.confidence).slice(1)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Session Status in Chat Mode */}
+      {mode === 'chat' && (
+        <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+          <p className="text-sm text-blue-800">
+            {sessionId
+              ? `Active chat session. Type 'Quit' to end the session.`
+              : 'No active session. Submit a query to start a new chat session.'}
+          </p>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Query Input */}
         <div>
@@ -70,12 +228,20 @@ export function QueryTab({ onRunStart, currentQuery, runData, isStreaming }: Que
             id="query"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="e.g., What are the exclusions for flood damage in California homeowners insurance?"
+            placeholder={
+              mode === 'chat'
+                ? "Continue the conversation... (Type 'Quit' to end session)"
+                : "e.g., What are the exclusions for flood damage in California homeowners insurance?"
+            }
             rows={4}
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-gray-900"
             required
             disabled={isSubmitting}
-            title="Enter your insurance-related question here. The RAG pipeline will search through indexed documents to find relevant information."
+            title={
+              mode === 'chat'
+                ? "Continue the chat conversation. The system remembers previous Q&As in this session."
+                : "Enter your insurance-related question here. The RAG pipeline will search through indexed documents to find relevant information."
+            }
           />
         </div>
 

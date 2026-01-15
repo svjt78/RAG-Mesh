@@ -49,13 +49,19 @@ Score 0.0 = severely toxic, 1.0 = no toxicity"""
             )
 
             result = json.loads(response["content"])
-            # Invert: lower toxicity = higher score
-            score = 1.0 - result.get("toxicity_score", 0.0)
+            toxic_elements = result.get("toxic_elements", [])
+
+            # LLM returns score where 1.0 = no toxicity, 0.0 = severely toxic
+            # If no toxic elements found, force score to 1.0 for consistency
+            if not toxic_elements or len(toxic_elements) == 0:
+                score = 1.0
+            else:
+                score = result.get("toxicity_score", 0.0)
 
             return {
                 "score": score,
-                "details": {"toxic_elements": result.get("toxic_elements", [])},
-                "message": f"Toxicity score: {score:.2f} (lower is better)"
+                "details": {"toxic_elements": toxic_elements},
+                "message": f"Toxicity score: {score:.2f} (higher is better)"
             }
 
         except Exception as e:

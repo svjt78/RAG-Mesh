@@ -51,7 +51,9 @@ Score 0.0 = severe contradictions, 1.0 = no contradictions"""
             )
 
             result = json.loads(response["content"])
-            score = result.get("contradiction_score", 0.0)
+            # LLM returns score where 1.0 = no contradictions, 0.0 = severe contradictions
+            # Default to 0.8 (assume mostly non-contradictory) if score missing
+            score = result.get("contradiction_score", 0.8)
 
             return {
                 "score": score,

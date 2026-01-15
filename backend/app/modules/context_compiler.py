@@ -311,3 +311,94 @@ class ContextCompilerModule:
         except Exception as e:
             logger.error(f"Error counting tokens: {e}")
             return len(text) // 4  # Fallback estimate
+
+    async def compile_context_with_chat(
+        self,
+        fused_results: List[Dict[str, Any]],
+        query: str,
+        profile: ContextProfile,
+        chat_history_text: str,
+        chat_history_tokens: int,
+        chat_profile
+    ) -> ContextPack:
+        """
+        Compile context with chat history integration
+
+        Args:
+            fused_results: Fused retrieval results
+            query: Current query
+            profile: Context profile with token budget
+            chat_history_text: Formatted chat history
+            chat_history_tokens: Token count of chat history
+            chat_profile: Chat profile for positioning
+
+        Returns:
+            ContextPack with integrated chat history
+        """
+        logger.info(f"Compiling context with chat history ({chat_history_tokens} tokens)")
+
+        # Calculate available budget for retrieval context
+        # Total budget - history tokens - reserved tokens
+        retrieval_budget = profile.max_context_tokens - chat_history_tokens
+
+        if hasattr(profile, 'reserve_tokens_for_query'):
+            retrieval_budget -= profile.reserve_tokens_for_query
+        if hasattr(profile, 'reserve_tokens_for_instructions'):
+            retrieval_budget -= profile.reserve_tokens_for_instructions
+
+        if retrieval_budget < 500:
+            logger.warning(f"Very low retrieval budget: {retrieval_budget} tokens")
+            retrieval_budget = max(500, retrieval_budget)  # Ensure minimum budget
+
+        # Load chunk texts
+        chunks_with_text = await self._load_chunk_texts(fused_results)
+
+        # Pack retrieval chunks within reduced budget
+        packed_chunks, retrieval_context, retrieval_tokens = await self._pack_chunks(
+            chunks=chunks_with_text,
+            budget=retrieval_budget,
+            profile=profile
+        )
+
+        # Combine chat history and retrieval context based on position
+        summary_position = getattr(chat_profile, 'summary_position', 'before_retrieval')
+        if summary_position == "before_retrieval":
+            combined_context = f"{chat_history_text}\n\n[Current Query Context]\n{retrieval_context}"
+        else:
+            combined_context = f"{retrieval_context}\n\n[Conversation History]\n{chat_history_text}"
+
+        total_tokens = chat_history_tokens + retrieval_tokens
+
+        # Generate coverage
+        coverage = self._generate_coverage(query, packed_chunks)
+
+        # Apply PII redaction
+        redactions = []
+        if profile.redact_pii:
+            combined_context, redactions = self._redact_pii(combined_context)
+
+        # Create ContextPack
+        context_pack = ContextPack(
+            context_text=combined_context,
+            chunks=packed_chunks,
+            token_budget=profile.max_context_tokens,
+            tokens_used=total_tokens,
+            coverage=coverage,
+            redactions_applied=redactions,
+            metadata={
+                "num_chunks": len(packed_chunks),
+                "citation_format": profile.citation_format,
+                "query": query,
+                "chat_history_tokens": chat_history_tokens,
+                "retrieval_tokens": retrieval_tokens,
+                "mode": "chat"
+            }
+        )
+
+        logger.info(
+            f"Context compiled with chat: {len(packed_chunks)} chunks, "
+            f"{total_tokens}/{profile.max_context_tokens} tokens "
+            f"(history: {chat_history_tokens}, retrieval: {retrieval_tokens})"
+        )
+
+        return context_pack

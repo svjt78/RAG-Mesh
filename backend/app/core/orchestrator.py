@@ -16,6 +16,7 @@ from app.core.models import (
     Event, EventType, RetrievalBundle, Answer, JudgeReport
 )
 from app.core.config_loader import get_config_loader
+from app.core.chat_manager import ChatSessionManager
 from app.adapters.file_doc_store import FileDocStoreAdapter
 from app.adapters.faiss_vector_store import FAISSVectorStoreAdapter
 from app.adapters.networkx_graph_store import NetworkXGraphStoreAdapter
@@ -60,6 +61,9 @@ class RunOrchestrator:
         self.generation = GenerationModule(self.llm)
         self.judge = JudgeOrchestrator(self.llm)
 
+        # Chat session manager
+        self.chat_manager = ChatSessionManager(self.llm)
+
         # Config loader
         self.config_loader = get_config_loader()
 
@@ -76,7 +80,11 @@ class RunOrchestrator:
         context_profile_id: str = "default",
         judge_profile_id: str = "strict_insurance",
         doc_filter: Optional[Dict[str, Any]] = None,
-        overrides: Optional[Dict[str, Any]] = None
+        overrides: Optional[Dict[str, Any]] = None,
+        # Chat mode parameters (optional, defaults preserve existing behavior)
+        mode: str = "query",
+        session_id: Optional[str] = None,
+        chat_profile_id: str = "default"
     ) -> Dict[str, Any]:
         """
         Execute complete RAG pipeline
@@ -119,11 +127,62 @@ class RunOrchestrator:
         )
         await self._save_artifact(artifacts_dir, "config_snapshot.json", config_snapshot)
 
+        # Chat mode handling
+        is_chat_mode = mode == "chat"
+        chat_session = None
+        turn_number = None
+        history_compacted = False
+        chat_profile = None
+
+        if is_chat_mode:
+            # Check for quit command
+            if self.chat_manager.check_quit_command(query):
+                logger.info(f"Quit command received for session {session_id}")
+                if session_id:
+                    self.chat_manager.delete_session(session_id)
+                    await self._emit_event(run_id, EventType.CHAT_SESSION_TERMINATED,
+                                         "chat_terminated", {"session_id": session_id})
+                return {
+                    "run_id": run_id,
+                    "status": "terminated",
+                    "session_id": session_id,
+                    "message": "Chat session terminated"
+                }
+
+            # Get or create session
+            if session_id:
+                chat_session = self.chat_manager.get_session(session_id)
+                if not chat_session:
+                    logger.warning(f"Session {session_id} not found, creating new")
+                    session_id = self.chat_manager.create_session(workflow_id, chat_profile_id)
+                    chat_session = self.chat_manager.get_session(session_id)
+                    await self._emit_event(run_id, EventType.CHAT_SESSION_CREATED,
+                                         "chat_session_created", {"session_id": session_id})
+            else:
+                session_id = self.chat_manager.create_session(workflow_id, chat_profile_id)
+                chat_session = self.chat_manager.get_session(session_id)
+                await self._emit_event(run_id, EventType.CHAT_SESSION_CREATED,
+                                     "chat_session_created", {"session_id": session_id})
+
+            # Load chat profile
+            chat_profile = self.config_loader.get_chat_profile(chat_profile_id)
+
+            # Check and perform compaction if needed
+            history_compacted = await self.chat_manager.check_and_compact(session_id, chat_profile)
+            if history_compacted:
+                await self._emit_event(run_id, EventType.CHAT_COMPACTED, "chat_compaction", {
+                    "session_id": session_id,
+                    "summary_length": len(chat_session.history.summary or "")
+                })
+                logger.info(f"Chat history compacted for session {session_id}")
+
         try:
             # Emit run started
             await self._emit_event(run_id, EventType.RUN_STARTED, "run_started", {
                 "query": query,
-                "workflow_id": workflow_id
+                "workflow_id": workflow_id,
+                "mode": mode,
+                "session_id": session_id if is_chat_mode else None
             })
 
             # Step 1: Retrieval
@@ -144,23 +203,40 @@ class RunOrchestrator:
             })
 
             # Step 3: Context Compilation
-            context_pack = await self.context_compiler.compile_context(
-                fused_results, query, context_profile
-            )
+            if is_chat_mode:
+                # Get formatted chat history
+                history_text, history_tokens = self.chat_manager.get_formatted_history(
+                    session_id, chat_profile, self.context_compiler.encoding
+                )
+                # Compile context with chat history
+                context_pack = await self.context_compiler.compile_context_with_chat(
+                    fused_results, query, context_profile,
+                    history_text, history_tokens, chat_profile
+                )
+            else:
+                # Regular mode
+                context_pack = await self.context_compiler.compile_context(
+                    fused_results, query, context_profile
+                )
             await self._save_artifact(artifacts_dir, "context_pack.json",
                                      context_pack.model_dump())
             await self._emit_event(run_id, EventType.CONTEXT_COMPILED, "context", {
                 "chunks": len(context_pack.chunks),
-                "tokens": context_pack.tokens_used
+                "tokens": context_pack.tokens_used,
+                "mode": mode
             })
 
             # Step 4: Generation
-            answer = await self.generation.generate_answer(query, context_pack)
+            if is_chat_mode:
+                answer = await self.generation.generate_answer_chat(query, context_pack)
+            else:
+                answer = await self.generation.generate_answer(query, context_pack)
             await self._save_artifact(artifacts_dir, "answer.json", answer.model_dump())
             await self._emit_event(run_id, EventType.GENERATION_COMPLETED, "generation", {
                 "citations": len(answer.citations),
                 "tokens": answer.tokens_used,
-                "cost": answer.cost
+                "cost": answer.cost,
+                "mode": mode
             })
 
             # Step 5: Judge Validation (optional)
@@ -194,6 +270,17 @@ class RunOrchestrator:
             # Save events
             await self._save_events(run_dir)
 
+            # Add turn to chat session if in chat mode and not blocked
+            if is_chat_mode and not blocked_by_judge:
+                turn_number = self.chat_manager.add_turn(
+                    session_id, query, answer, run_id,
+                    tokens=answer.tokens_used + context_pack.tokens_used
+                )
+                await self._emit_event(run_id, EventType.CHAT_TURN_ADDED, "chat_turn_added", {
+                    "session_id": session_id,
+                    "turn_number": turn_number
+                })
+
             logger.info(f"Run completed: {run_id}, status: {status}")
 
             allow_blocked_answer = not workflow.fail_on_judge_block
@@ -203,7 +290,11 @@ class RunOrchestrator:
                 "status": status,
                 "decision": decision,
                 "answer": answer if should_return_answer else None,
-                "judge_report": judge_report
+                "judge_report": judge_report,
+                # Chat mode fields
+                "session_id": session_id if is_chat_mode else None,
+                "turn_number": turn_number if is_chat_mode else None,
+                "history_compacted": history_compacted if is_chat_mode else False
             }
 
         except Exception as e:
@@ -342,6 +433,36 @@ class RunOrchestrator:
                     events.append(event)
 
         return events
+
+    async def get_run(self, run_id: str) -> Optional[Dict[str, Any]]:
+        """Get run details including status and artifacts"""
+        run_dir = self.runs_dir / run_id
+
+        if not run_dir.exists():
+            return None
+
+        # Get events to determine status
+        events = await self.get_run_events(run_id)
+        status = "unknown"
+        for event in reversed(events):
+            if event.event_type == EventType.RUN_FAILED:
+                status = "failed"
+                break
+            elif event.event_type == EventType.RUN_BLOCKED:
+                status = "blocked"
+                break
+            elif event.event_type == EventType.RUN_COMPLETED:
+                status = "completed"
+                break
+            elif event.event_type == EventType.CHAT_SESSION_TERMINATED:
+                status = "terminated"
+                break
+
+        return {
+            "run_id": run_id,
+            "status": status,
+            "events": events
+        }
 
     async def get_artifact(self, run_id: str, artifact_name: str) -> Optional[Dict[str, Any]]:
         """Get artifact from run"""

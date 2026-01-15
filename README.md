@@ -9,12 +9,43 @@ RAGMesh is a comprehensive, configuration-driven RAG system designed specificall
 ![Next.js 14](https://img.shields.io/badge/Next.js-14-black.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
+## What's New 🎉
+
+### Latest Updates (January 2026)
+
+- **🗨️ Chat Mode**: Added stateful multi-turn conversations with intelligent history management
+  - In-memory session management with automatic compaction
+  - LLM-based conversation summarization
+  - Token budget balancing between history and retrieval context
+  - Three configurable chat profiles (default, long_context, compact)
+
+- **🎨 Enhanced UI**:
+  - Mode toggle for switching between Query and Chat modes
+  - Dedicated chat history panel showing full conversation thread
+  - Real-time session status indicators
+  - Chat profile configuration editor
+
+- **⚙️ Configuration Improvements**:
+  - New `chat_profiles.json` with 3 profile types
+  - Enhanced judge profiles with improved validation thresholds
+  - Better event tracking for chat sessions
+
+- **🔧 Backend Enhancements**:
+  - New `ChatSessionManager` for session lifecycle management
+  - Enhanced context compiler with chat-aware token management
+  - Improved generation module with chat-specific prompting
+  - Robust judge checks with better edge case handling
+
+See [CHAT_MODE_IMPLEMENTATION_PLAN.md](CHAT_MODE_IMPLEMENTATION_PLAN.md) for complete design details.
+
 ## Features
 
 ### Core Capabilities
+- **Dual Execution Modes**: Query mode (stateless) and Chat mode (multi-turn conversations)
 - **Tri-Modal Retrieval**: Vector (FAISS) + Document (BM25/TF-IDF) + Graph (NetworkX)
 - **9-Check Validation**: Citation coverage, groundedness, hallucination detection, and 6 more
-- **Configuration-Driven**: 100% JSON-configurable with 8 profile types
+- **Configuration-Driven**: 100% JSON-configurable with 9 profile types
+- **Intelligent Chat Sessions**: In-memory sessions with LLM-based history compaction
 - **Real-Time Streaming**: SSE for live pipeline updates
 - **Complete Observability**: Event sourcing with full audit trail
 - **Production-Ready**: Docker, comprehensive testing, error handling
@@ -77,6 +108,18 @@ Go to the **Query** tab and try:
 
 Explore the results across all 9 tabs to see the complete pipeline execution!
 
+### 5. Try Chat Mode (NEW!)
+
+Switch to **Chat Mode** in the Query tab for multi-turn conversations:
+
+1. Toggle to **Chat Mode** using the mode selector
+2. Ask: "What does the homeowners policy cover?"
+3. Follow up: "What about water damage specifically?"
+4. Continue: "Are there any endorsements that expand this coverage?"
+5. Type "Quit" to end the session
+
+Chat mode maintains conversation history and allows contextual follow-up questions!
+
 ## System Architecture
 
 ```
@@ -125,6 +168,48 @@ Explore the results across all 9 tabs to see the complete pipeline execution!
 └─────────────────────────────────────────────────────────────┘
 ```
 
+## Chat Mode (NEW Feature!)
+
+RAGMesh now supports **stateful multi-turn conversations** alongside traditional stateless queries.
+
+### Key Features
+
+- **In-Memory Sessions**: Conversation state maintained during session (lost on refresh)
+- **Contextual Awareness**: Each turn has access to full conversation history
+- **Intelligent Compaction**: LLM-based summarization when history exceeds token threshold
+- **Full Pipeline Execution**: Each turn executes complete RAG pipeline with retrieval
+- **Token Budget Management**: Balances history tokens with retrieval context
+- **Configuration-Driven**: Three chat profiles (default, long_context, compact)
+
+### How It Works
+
+1. **Toggle to Chat Mode** in the Query tab
+2. **Ask your first question** - A new session is created automatically
+3. **Follow-up questions** reference previous conversation context
+4. **View chat history** in the dedicated panel showing all Q&A turns
+5. **Type "Quit"** or click "End Session" to terminate
+
+### Chat vs Query Mode
+
+| Feature | Query Mode | Chat Mode |
+|---------|------------|-----------|
+| State | Stateless | Stateful |
+| History | None | Full conversation |
+| Use Case | One-off questions | Exploratory conversations |
+| Context | Retrieval only | History + Retrieval |
+| Sessions | No | Yes (in-memory) |
+
+### Configuration
+
+Chat profiles control history management:
+
+- **compaction_threshold_tokens**: When to trigger summarization (default: 2000)
+- **max_history_turns**: Maximum turns before compaction (default: 10)
+- **summarization_model**: LLM for history summarization
+- **reserve_tokens_for_history**: Token budget reserved for conversation history
+
+See [config/chat_profiles.json](config/chat_profiles.json) for full details.
+
 ## Project Structure
 
 ```
@@ -138,7 +223,10 @@ RAGMesh/
 │   │   │   ├── networkx_graph.py
 │   │   │   └── openai_adapter.py
 │   │   ├── core/                 # Core domain models
-│   │   │   └── models.py         # Pydantic models
+│   │   │   ├── models.py         # Pydantic models
+│   │   │   ├── orchestrator.py   # Pipeline orchestration
+│   │   │   ├── config_loader.py  # Configuration loader
+│   │   │   └── chat_manager.py   # Chat session management (NEW)
 │   │   ├── modules/              # Pipeline modules
 │   │   │   ├── ingestion.py
 │   │   │   ├── indexing.py
@@ -164,16 +252,17 @@ RAGMesh/
 │   ├── app/
 │   │   ├── layout.tsx
 │   │   └── page.tsx              # Main application
-│   ├── components/               # 9 tab components
-│   │   ├── QueryTab.tsx
+│   ├── components/               # 9 tab components + chat UI
+│   │   ├── QueryTab.tsx          # Query input + Chat mode UI (ENHANCED)
 │   │   ├── RetrievalTab.tsx
 │   │   ├── FusionTab.tsx
 │   │   ├── ContextTab.tsx
 │   │   ├── AnswerTab.tsx
 │   │   ├── JudgeTab.tsx
-│   │   ├── EventsTab.tsx
-│   │   ├── ConfigTab.tsx
-│   │   └── DocumentsTab.tsx
+│   │   ├── EventsTab.tsx         # Event streaming display (ENHANCED)
+│   │   ├── ConfigTab.tsx         # Configuration management (ENHANCED)
+│   │   ├── DocumentsTab.tsx
+│   │   └── ChatProfileEditor.tsx # Chat profile editor (NEW)
 │   ├── lib/
 │   │   ├── api.ts                # API client
 │   │   └── types.ts              # TypeScript types
@@ -188,6 +277,7 @@ RAGMesh/
 │   ├── fusion_profiles.json      # 5 fusion strategies
 │   ├── context_profiles.json     # 4 context packing strategies
 │   ├── judge_profiles.json       # 4 validation profiles
+│   ├── chat_profiles.json        # 3 chat mode profiles (NEW)
 │   └── telemetry.json            # 3 telemetry profiles
 │
 ├── sample_data/                  # Sample insurance PDFs
@@ -207,12 +297,13 @@ RAGMesh/
 ├── QUICKSTART.md                 # Quick start guide
 ├── ARCHITECTURE.md               # Architecture documentation
 ├── PROGRESS.md                   # Implementation progress
+├── CHAT_MODE_IMPLEMENTATION_PLAN.md  # Chat mode design doc (NEW)
 └── README.md                     # This file
 ```
 
 ## Configuration Profiles
 
-RAGMesh is 100% configuration-driven with 8 profile types:
+RAGMesh is 100% configuration-driven with 9 profile types:
 
 ### 1. Workflows (3 profiles)
 - `default` - Balanced pipeline
@@ -250,12 +341,17 @@ RAGMesh is 100% configuration-driven with 8 profile types:
 - `lenient` - Lower thresholds
 - `critical-only` - Only hard-fail checks
 
-### 7. Telemetry (3 profiles)
+### 7. Chat (3 profiles) - NEW!
+- `default` - Standard chat (2000 token threshold, 10 turn history)
+- `long_context` - Extended conversations (4000 tokens, 20 turns)
+- `compact` - Minimal history (1000 tokens, 5 turns)
+
+### 8. Telemetry (3 profiles)
 - `minimal` - Critical events only
 - `standard` - Key milestones + errors
 - `detailed` - Full event stream
 
-### 8. Models
+### 9. Models
 - Generation: GPT-3.5-turbo
 - Embeddings: text-embedding-3-small
 - Configurable temperature, max_tokens, timeouts
@@ -289,14 +385,29 @@ Content-Type: application/json
 }
 ```
 
-#### Execute Query
+#### Execute Query (Query Mode)
 ```bash
 POST /run
 Content-Type: application/json
 
 {
   "query": "What does the policy cover?",
-  "workflow_profile_id": "default"
+  "workflow_profile_id": "default",
+  "mode": "query"
+}
+```
+
+#### Execute Query (Chat Mode) - NEW!
+```bash
+POST /run
+Content-Type: application/json
+
+{
+  "query": "What about water damage?",
+  "workflow_profile_id": "default",
+  "mode": "chat",
+  "session_id": "abc-123-def",  // Optional for first turn
+  "chat_profile_id": "default"
 }
 ```
 
@@ -309,6 +420,18 @@ Accept: text/event-stream
 #### Get Run Status
 ```bash
 GET /run/{run_id}/status
+```
+
+#### Chat Session Management - NEW!
+```bash
+# Get chat session details
+GET /chat/session/{session_id}
+
+# List all active chat sessions
+GET /chat/sessions
+
+# Delete chat session
+DELETE /chat/session/{session_id}
 ```
 
 See full API documentation at http://localhost:8017/docs (when running).
@@ -332,6 +455,14 @@ open htmlcov/index.html
 pytest -m unit          # Unit tests only
 pytest -m integration   # Integration tests
 pytest -m slow          # Slow tests (E2E)
+```
+
+### Test Chat Mode
+```bash
+# Chat-specific tests
+pytest tests/test_chat_manager.py           # Chat session management
+pytest tests/test_e2e_chat.py               # End-to-end chat tests
+pytest tests/modules/test_context_compiler.py -k chat  # Chat context tests
 ```
 
 ### Test Coverage
@@ -466,19 +597,35 @@ docker-compose up --build
 - Check `NEXT_PUBLIC_API_URL` in `.env`
 - Verify backend health: http://localhost:8017/health
 
+**Chat mode issues**
+- **Session lost on refresh**: This is expected - sessions are in-memory
+- **History not showing**: Check browser console for errors; verify session_id in response
+- **"Quit" not working**: Ensure exact spelling (case-insensitive)
+- **Token budget exceeded**: Try `compact` chat profile or reduce retrieval top-k
+- **Compaction errors**: Check backend logs for LLM API errors
+
 ## Roadmap
 
+### Recently Implemented ✅
+- [x] **Chat Mode**: Multi-turn conversations with intelligent history compaction
+- [x] **Chat Profiles**: Configurable chat behavior and token management
+- [x] **Session Management**: In-memory chat session lifecycle
+- [x] **Enhanced UI**: Mode toggle and chat history panel
+
 ### Planned Features
+- [ ] **Persistent Chat Sessions**: Save conversations to disk/database
+- [ ] **Chat Export**: Download conversation history as JSON/PDF
+- [ ] **Streaming Responses**: Token-by-token generation in chat mode
 - [ ] Support for more document types (DOCX, TXT, HTML)
 - [ ] Multi-language support
 - [ ] Fine-tuned embedding models
 - [ ] Advanced graph queries (SPARQL-like)
-- [ ] Query history and analytics
+- [ ] Query history and analytics dashboard
 - [ ] User management and authentication
 - [ ] Batch processing API
 - [ ] Export/import configurations
 - [ ] Custom judge check plugins
-- [ ] Real-time collaboration
+- [ ] Multi-user real-time collaboration
 
 ## Contributing
 
@@ -511,6 +658,7 @@ MIT License - see LICENSE file for details.
 
 - **Documentation**: See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed design
 - **Quick Start**: See [QUICKSTART.md](QUICKSTART.md)
+- **Chat Mode Design**: See [CHAT_MODE_IMPLEMENTATION_PLAN.md](CHAT_MODE_IMPLEMENTATION_PLAN.md)
 - **Issues**: Open an issue on GitHub
 - **Email**: support@ragmesh.example.com (if applicable)
 

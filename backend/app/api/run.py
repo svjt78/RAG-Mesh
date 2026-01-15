@@ -29,7 +29,7 @@ active_streams = {}
 @router.post("/run", response_model=RunResponse)
 async def execute_run(request: RunRequest):
     """
-    Execute a RAG query run
+    Execute a RAG query run (Query or Chat mode)
 
     Args:
         request: Run request with query and configuration
@@ -37,13 +37,13 @@ async def execute_run(request: RunRequest):
     Returns:
         Run response with run_id and status
     """
-    logger.info(f"Executing run with query: {request.query[:100]}...")
+    logger.info(f"Executing run with query: {request.query[:100]}... (mode: {request.mode})")
 
     try:
         # Validate workflow exists
         workflow = config_loader.get_workflow_profile(request.workflow_id)
 
-        # Execute run
+        # Execute run with chat mode support
         result = await orchestrator.execute_run(
             query=request.query,
             workflow_id=request.workflow_id,
@@ -52,7 +52,10 @@ async def execute_run(request: RunRequest):
             fusion_profile_id=request.fusion_profile_id,
             context_profile_id=request.context_profile_id,
             judge_profile_id=request.judge_profile_id,
-            doc_filter=request.doc_filter
+            doc_filter=request.doc_filter,
+            mode=request.mode,
+            session_id=request.session_id,
+            chat_profile_id=request.chat_profile_id or "default"
         )
 
         return RunResponse(
@@ -61,7 +64,10 @@ async def execute_run(request: RunRequest):
             sse_endpoint=f"/api/run/{result['run_id']}/stream",
             answer=result.get("answer"),
             judge_report=result.get("judge_report"),
-            metadata=result.get("metadata", {})
+            metadata=result.get("metadata", {}),
+            session_id=result.get("session_id"),
+            turn_number=result.get("turn_number"),
+            history_compacted=result.get("history_compacted", False)
         )
 
     except Exception as e:
@@ -107,6 +113,11 @@ async def get_run_status(run_id: str):
                     events.append(json.loads(line))
 
         status = "unknown"
+        session_id = None
+        turn_number = None
+        history_compacted = False
+
+        # Parse events to extract status and chat metadata
         for event in reversed(events):
             event_type = event.get("event_type")
             if event_type == "run_failed":
@@ -119,11 +130,29 @@ async def get_run_status(run_id: str):
                 status = "completed"
                 break
 
+        # Extract chat metadata from events (forward order to get latest)
+        for event in events:
+            event_type = event.get("event_type")
+            event_data = event.get("data", {})
+
+            # Session ID can be in run_started or chat_session_created events
+            if event_type == "run_started" and event_data.get("session_id"):
+                session_id = event_data.get("session_id")
+            elif event_type == "chat_session_created":
+                session_id = event_data.get("session_id")
+            elif event_type == "chat_turn_added":
+                turn_number = event_data.get("turn_number")
+            elif event_type == "chat_compacted":
+                history_compacted = True
+
         return {
             "run_id": run_id,
             "artifacts": artifacts,
             "events": events,
-            "status": status
+            "status": status,
+            "session_id": session_id,
+            "turn_number": turn_number,
+            "history_compacted": history_compacted
         }
 
     except HTTPException:
@@ -156,6 +185,16 @@ async def stream_run_events(run_id: str, request: Request):
 
             # Send initial connection event
             yield f"data: {json.dumps({'type': 'connected', 'run_id': run_id})}\n\n"
+
+            # Check if run already completed (race condition fix)
+            try:
+                run_data = await orchestrator.get_run(run_id)
+                if run_data and run_data.get("status") in ["completed", "failed", "blocked", "terminated"]:
+                    logger.info(f"Run {run_id} already completed, sending run_complete event")
+                    yield f"data: {json.dumps({'type': 'run_complete', 'run_id': run_id})}\n\n"
+                    return
+            except Exception as e:
+                logger.warning(f"Could not check run status: {e}")
 
             # Stream events from queue
             while True:
@@ -326,4 +365,77 @@ async def delete_run(run_id: str):
         raise
     except Exception as e:
         logger.error(f"Error deleting run: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Chat Session Management Endpoints
+# ============================================================================
+
+@router.get("/chat/session/{session_id}")
+async def get_chat_session(session_id: str):
+    """
+    Get chat session details
+
+    Args:
+        session_id: Session identifier
+
+    Returns:
+        Session details including history
+    """
+    try:
+        session = orchestrator.chat_manager.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return session.model_dump()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting chat session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/chat/session/{session_id}")
+async def delete_chat_session(session_id: str):
+    """
+    Delete chat session
+
+    Args:
+        session_id: Session identifier
+
+    Returns:
+        Deletion confirmation
+    """
+    try:
+        orchestrator.chat_manager.delete_session(session_id)
+        return {"status": "deleted", "session_id": session_id}
+    except Exception as e:
+        logger.error(f"Error deleting chat session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/chat/sessions")
+async def list_chat_sessions():
+    """
+    List all active chat sessions
+
+    Returns:
+        List of session summaries
+    """
+    try:
+        sessions = [
+            {
+                "session_id": sid,
+                "total_turns": session.history.total_turns,
+                "total_tokens": session.total_tokens,
+                "created_at": session.created_at.isoformat(),
+                "last_updated": session.last_updated.isoformat(),
+                "workflow_id": session.workflow_id,
+                "chat_profile_id": session.chat_profile_id
+            }
+            for sid, session in orchestrator.chat_manager.sessions.items()
+        ]
+        return {"sessions": sessions, "total": len(sessions)}
+    except Exception as e:
+        logger.error(f"Error listing chat sessions: {e}")
         raise HTTPException(status_code=500, detail=str(e))

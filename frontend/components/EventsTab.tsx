@@ -23,6 +23,7 @@ export function EventsTab({ runId, events }: EventsTabProps) {
   const [loadingRuns, setLoadingRuns] = useState(false);
   const [expandedRuns, setExpandedRuns] = useState<Set<string>>(new Set());
   const [runEvents, setRunEvents] = useState<Map<string, Event[]>>(new Map());
+  const [selectedRuns, setSelectedRuns] = useState<Set<string>>(new Set());
   const eventsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -149,6 +150,69 @@ export function EventsTab({ runId, events }: EventsTabProps) {
     }
   };
 
+  const handleSelectAll = () => {
+    if (selectedRuns.size === runs.length) {
+      // Deselect all
+      setSelectedRuns(new Set());
+    } else {
+      // Select all
+      setSelectedRuns(new Set(runs.map((run) => run.run_id)));
+    }
+  };
+
+  const handleSelectRun = (runId: string) => {
+    setSelectedRuns((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(runId)) {
+        newSet.delete(runId);
+      } else {
+        newSet.add(runId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedRuns.size === 0) {
+      alert('Please select at least one run to delete.');
+      return;
+    }
+
+    const confirmMessage = `Are you sure you want to delete ${selectedRuns.size} run${selectedRuns.size > 1 ? 's' : ''} and all their artifacts? This action cannot be undone.`;
+    if (!confirm(confirmMessage)) return;
+
+    try {
+      // Delete all selected runs
+      await Promise.all(
+        Array.from(selectedRuns).map((runId) => apiClient.deleteRun(runId))
+      );
+
+      // Clean up state
+      selectedRuns.forEach((runId) => {
+        if (expandedRuns.has(runId)) {
+          setExpandedRuns((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(runId);
+            return newSet;
+          });
+        }
+        if (runEvents.has(runId)) {
+          setRunEvents((prev) => {
+            const newMap = new Map(prev);
+            newMap.delete(runId);
+            return newMap;
+          });
+        }
+      });
+
+      // Clear selections and reload
+      setSelectedRuns(new Set());
+      await loadRuns();
+    } catch (err) {
+      alert('Failed to delete some runs. Please try again.');
+    }
+  };
+
   if (!runId && runs.length === 0 && !loadingRuns) {
     return (
       <div className="text-center py-12 text-gray-500">
@@ -254,7 +318,25 @@ export function EventsTab({ runId, events }: EventsTabProps) {
       {/* Run List */}
       <div className="border border-gray-200 rounded-lg bg-white">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-900">Event Streams</h3>
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              checked={runs.length > 0 && selectedRuns.size === runs.length}
+              onChange={handleSelectAll}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              title="Select all runs"
+            />
+            <h3 className="text-sm font-semibold text-gray-900">Event Streams</h3>
+            {selectedRuns.size > 0 && (
+              <button
+                onClick={handleBulkDelete}
+                className="ml-2 px-3 py-1 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded transition-colors"
+                title={`Delete ${selectedRuns.size} selected run${selectedRuns.size > 1 ? 's' : ''}`}
+              >
+                Delete Selected ({selectedRuns.size})
+              </button>
+            )}
+          </div>
           <button
             onClick={loadRuns}
             className="text-xs text-blue-600 hover:text-blue-800"
@@ -276,12 +358,22 @@ export function EventsTab({ runId, events }: EventsTabProps) {
                 <div key={run.run_id}>
                   {/* Run Header */}
                   <div className="flex items-center justify-between px-4 py-3">
-                    <div>
-                      <div className="text-sm text-gray-900">
-                        Real-time pipeline events for run: <span className="font-mono">{run.run_id}</span>
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {run.status || 'unknown'}{run.created_at ? ` • ${new Date(run.created_at * 1000).toLocaleString()}` : ''}
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedRuns.has(run.run_id)}
+                        onChange={() => handleSelectRun(run.run_id)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        onClick={(e) => e.stopPropagation()}
+                        title="Select this run"
+                      />
+                      <div>
+                        <div className="text-sm text-gray-900">
+                          Real-time pipeline events for run: <span className="font-mono">{run.run_id}</span>
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {run.status || 'unknown'}{run.created_at ? ` • ${new Date(run.created_at * 1000).toLocaleString()}` : ''}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">

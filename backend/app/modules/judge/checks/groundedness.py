@@ -40,7 +40,9 @@ Output JSON:
   "grounded_claims": ["claim 1", "claim 2"],
   "ungrounded_claims": ["claim 3"],
   "overall_score": 0.0-1.0
-}}"""
+}}
+
+Score 1.0 = all claims grounded, 0.0 = all claims ungrounded"""
 
         try:
             response = await self.llm.generate(
