@@ -514,3 +514,62 @@ class RunResponse(BaseModel):
     session_id: Optional[str] = Field(None, description="Chat session ID (chat mode only)")
     turn_number: Optional[int] = Field(None, description="Turn number in chat session")
     history_compacted: bool = Field(default=False, description="Whether compaction occurred this turn")
+
+
+# ============================================================================
+# Synchronous API Request/Response Models
+# ============================================================================
+
+class QueryRequest(BaseModel):
+    """Simplified synchronous query request"""
+    query: str = Field(..., min_length=1, description="User question")
+    workflow_id: str = Field(default="default_workflow")
+    retrieval_profile_id: str = Field(default="balanced_insurance")
+    fusion_profile_id: str = Field(default="balanced")
+    context_profile_id: str = Field(default="default")
+    judge_profile_id: str = Field(default="strict_insurance")
+    doc_filter: Optional[Dict[str, Any]] = None
+    include_metadata: bool = Field(default=False, description="Include run_id and debug info")
+
+
+class QueryResponse(BaseModel):
+    """Simplified synchronous query response"""
+    answer: str = Field(..., description="Generated answer text")
+    citations: List[Citation] = Field(..., description="Supporting citations")
+    confidence: str = Field(..., description="Confidence level: high/medium/low")
+    judge_passed: bool = Field(..., description="Whether answer passed validation")
+    judge_decision: str = Field(..., description="PASS, FAIL_BLOCKED, or FAIL_RETRYABLE")
+    assumptions: List[str] = Field(default_factory=list)
+    limitations: List[str] = Field(default_factory=list)
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Debug metadata (if include_metadata=True)")
+
+
+class ChatRequest(BaseModel):
+    """Simplified synchronous chat request"""
+    message: str = Field(..., min_length=1, description="User message")
+    session_id: Optional[str] = Field(None, description="Session ID for continuing conversation")
+    workflow_id: str = Field(default="default_workflow")
+    chat_profile_id: str = Field(default="default")
+    retrieval_profile_id: str = Field(default="balanced_insurance")
+    fusion_profile_id: str = Field(default="balanced")
+    context_profile_id: str = Field(default="default")
+    judge_profile_id: str = Field(default="strict_insurance")
+    doc_filter: Optional[Dict[str, Any]] = None
+    include_metadata: bool = Field(default=False)
+
+
+class ChatResponse(BaseModel):
+    """Simplified synchronous chat response"""
+    answer: str = Field(..., description="Generated answer text")
+    citations: List[Citation] = Field(..., description="Supporting citations")
+    confidence: str = Field(..., description="Confidence level")
+    session_id: str = Field(..., description="Session ID (use in next request)")
+    turn_number: int = Field(..., description="Current turn number")
+    session_created: bool = Field(default=False, description="True if this started a new session")
+    session_terminated: bool = Field(default=False, description="True if session was ended")
+    history_compacted: bool = Field(default=False, description="True if history was compacted")
+    judge_passed: bool = Field(..., description="Whether answer passed validation")
+    judge_decision: str = Field(..., description="Judge decision")
+    assumptions: List[str] = Field(default_factory=list)
+    limitations: List[str] = Field(default_factory=list)
+    metadata: Optional[Dict[str, Any]] = None

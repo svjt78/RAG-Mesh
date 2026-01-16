@@ -104,9 +104,10 @@ async def health_check():
 
 
 # Register API routes
-from app.api import ingest, run, config, docs
+from app.api import ingest, run, config, docs, sync
 
 app.include_router(ingest.router, prefix="/api", tags=["Ingestion"])
 app.include_router(run.router, prefix="/api", tags=["Execution"])
 app.include_router(config.router, prefix="/api", tags=["Configuration"])
 app.include_router(docs.router, prefix="/api", tags=["Documents"])
+app.include_router(sync.router, prefix="/api", tags=["Synchronous API"])
