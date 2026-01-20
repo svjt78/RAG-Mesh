@@ -13,6 +13,19 @@ RAGMesh is a comprehensive, configuration-driven RAG system designed specificall
 
 ### Latest Updates (January 2026)
 
+- **📊 Fusion Logic Documentation**: Comprehensive documentation of tri-modal retrieval scoring
+  - Detailed explanation of V (Vector), D (Document), G (Graph) score calculations
+  - Weighted Reciprocal Rank Fusion (RRF) formula with worked examples
+  - Configuration options for fusion weights and retrieval profiles
+  - See [FUSION_LOGIC.md](FUSION_LOGIC.md) for complete details
+
+- **🔗 Graph Retrieval Enhancements**: Improved entity linking and scoring
+  - LLM-based entity extraction from queries using GPT-3.5-turbo
+  - Fuzzy matching with SequenceMatcher (0.8 threshold) for entity linking
+  - Seed entity boosting (1.5x) for chunks supporting query-linked entities
+  - Normalized scoring with entity mention counting
+  - See [GRAPH_SEARCH.md](GRAPH_SEARCH.md) for implementation details
+
 - **🗨️ Chat Mode**: Added stateful multi-turn conversations with intelligent history management
   - In-memory session management with automatic compaction
   - LLM-based conversation summarization
@@ -43,6 +56,7 @@ See [CHAT_MODE_IMPLEMENTATION_PLAN.md](CHAT_MODE_IMPLEMENTATION_PLAN.md) for com
 ### Core Capabilities
 - **Dual Execution Modes**: Query mode (stateless) and Chat mode (multi-turn conversations)
 - **Tri-Modal Retrieval**: Vector (FAISS) + Document (BM25/TF-IDF) + Graph (NetworkX)
+- **Retrieval Docs**: [Document Search](DOCUMENT_SEARCH.md), [Graph Search](GRAPH_SEARCH.md), and [Fusion Logic](FUSION_LOGIC.md)
 - **9-Check Validation**: Citation coverage, groundedness, hallucination detection, and 6 more
 - **Configuration-Driven**: 100% JSON-configurable with 9 profile types
 - **Intelligent Chat Sessions**: In-memory sessions with LLM-based history compaction
@@ -167,6 +181,46 @@ Chat mode maintains conversation history and allows contextual follow-up questio
 │  └─────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+## Tri-Modal Retrieval System
+
+RAGMesh uses three complementary retrieval modalities that are fused using Weighted Reciprocal Rank Fusion (RRF):
+
+### Vector Search (V Score)
+- **Method**: Semantic similarity using embeddings
+- **Implementation**: FAISS index with cosine similarity
+- **Score Range**: 0.0 to 1.0
+- **Best For**: Finding conceptually related content even with different wording
+
+### Document Search (D Score)
+- **Method**: Keyword matching with BM25 + TF-IDF
+- **Implementation**: 60% BM25 + 40% TF-IDF with boost factors
+- **Score Range**: 0.0 to ~5.4 (with all boosts)
+- **Boosts**:
+  - Exact match: 1.5x
+  - Form number: 2.0x
+  - Defined terms: 1.8x
+- **Best For**: Finding exact keyword matches and specific terms
+
+### Graph Search (G Score)
+- **Method**: Entity-based knowledge graph traversal
+- **Implementation**: NetworkX with LLM entity extraction
+- **Score Range**: 0.0 to 1.0 (capped)
+- **Process**:
+  1. Extract entities from query using LLM (GPT-3.5-turbo)
+  2. Link to graph nodes via exact match or fuzzy matching (>0.8 similarity)
+  3. Traverse relationships up to `graph_max_hops`
+  4. Score by entity mention count, boost 1.5x for seed entities
+- **Best For**: Finding structurally related content through entity relationships
+
+### Fusion (Final Score)
+All three modalities are combined using **rank-based fusion**, not score averaging:
+
+```
+Final_Score = Σ (Weight_i / (K + Rank_i))
+```
+
+This approach handles incompatible score ranges and produces robust rankings. See [FUSION_LOGIC.md](FUSION_LOGIC.md) for detailed calculations.
 
 ## Chat Mode (NEW Feature!)
 
@@ -297,7 +351,10 @@ RAGMesh/
 ├── QUICKSTART.md                 # Quick start guide
 ├── ARCHITECTURE.md               # Architecture documentation
 ├── PROGRESS.md                   # Implementation progress
-├── CHAT_MODE_IMPLEMENTATION_PLAN.md  # Chat mode design doc (NEW)
+├── CHAT_MODE_IMPLEMENTATION_PLAN.md  # Chat mode design doc
+├── DOCUMENT_SEARCH.md            # Document (BM25/TF-IDF) retrieval docs
+├── GRAPH_SEARCH.md               # Graph-based retrieval docs
+├── FUSION_LOGIC.md               # Tri-modal fusion scoring docs (NEW)
 └── README.md                     # This file
 ```
 
@@ -659,6 +716,10 @@ MIT License - see LICENSE file for details.
 - **Documentation**: See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed design
 - **Quick Start**: See [QUICKSTART.md](QUICKSTART.md)
 - **Chat Mode Design**: See [CHAT_MODE_IMPLEMENTATION_PLAN.md](CHAT_MODE_IMPLEMENTATION_PLAN.md)
+- **Retrieval Documentation**:
+  - [DOCUMENT_SEARCH.md](DOCUMENT_SEARCH.md) - BM25/TF-IDF keyword search
+  - [GRAPH_SEARCH.md](GRAPH_SEARCH.md) - Entity-based graph retrieval
+  - [FUSION_LOGIC.md](FUSION_LOGIC.md) - Tri-modal fusion scoring (V, D, G)
 - **Issues**: Open an issue on GitHub
 - **Email**: support@ragmesh.example.com (if applicable)
 

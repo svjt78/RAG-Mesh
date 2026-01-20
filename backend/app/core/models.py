@@ -52,7 +52,8 @@ class Chunk(BaseModel):
 # ============================================================================
 
 class EntityType(str, Enum):
-    """Insurance-specific entity types"""
+    """Entity types for knowledge graph"""
+    # Insurance-specific
     COVERAGE = "Coverage"
     EXCLUSION = "Exclusion"
     CONDITION = "Condition"
@@ -61,6 +62,14 @@ class EntityType(str, Enum):
     DEFINITION = "Definition"
     STATE = "State"
     TERM = "Term"
+    # Generic types
+    CONCEPT = "Concept"
+    PRODUCT = "Product"
+    DOCUMENT = "Document"
+    ORGANIZATION = "Organization"
+    DATE = "Date"
+    EVENT = "Event"
+    METRIC = "Metric"
     OTHER = "Other"
 
 

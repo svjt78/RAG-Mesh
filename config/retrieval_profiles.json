@@ -10,7 +10,15 @@
       "doc_boost_form_number": 2.0,
       "doc_boost_defined_term": 1.8,
       "graph_max_hops": 2,
-      "graph_entity_types": []
+      "graph_entity_types": [
+        "Concept",
+        "Product",
+        "Document",
+        "Organization",
+        "Date",
+        "Event",
+        "Metric"
+      ]
     },
     "vector_focused": {
       "description": "Heavy emphasis on semantic vector search",
