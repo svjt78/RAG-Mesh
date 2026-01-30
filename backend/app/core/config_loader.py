@@ -420,6 +420,37 @@ class ConfigLoader:
             logger.error(f"Failed to save chunking profile configuration: {e}")
             raise
 
+    def save_graph_extraction_profile(self, profile_id: str, profile_data: Dict[str, Any]) -> None:
+        """
+        Save or update a graph extraction profile configuration
+
+        Args:
+            profile_id: Graph extraction profile identifier
+            profile_data: Graph extraction profile configuration data
+
+        Raises:
+            ValueError: If profile data is invalid
+        """
+        # Validate using Pydantic model
+        try:
+            validated_profile = GraphExtractionProfile(**profile_data)
+        except Exception as e:
+            logger.error(f"Invalid graph extraction profile data: {e}")
+            raise ValueError(f"Invalid graph extraction profile configuration: {e}")
+
+        # Update in-memory config
+        self.configs["graph_extraction_profiles"]["profiles"][profile_id] = validated_profile.model_dump()
+
+        # Save to file
+        file_path = self.config_dir / "graph_extraction_profiles.json"
+        try:
+            with open(file_path, 'w') as f:
+                json.dump(self.configs["graph_extraction_profiles"], f, indent=2)
+            logger.info(f"Saved graph extraction profile configuration: {profile_id}")
+        except Exception as e:
+            logger.error(f"Failed to save graph extraction profile configuration: {e}")
+            raise
+
     def save_retrieval_profile(self, profile_id: str, profile_data: Dict[str, Any]) -> None:
         """
         Save or update a retrieval profile configuration

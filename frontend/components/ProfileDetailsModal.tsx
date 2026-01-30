@@ -32,6 +32,9 @@ export function ProfileDetailsModal({ profileId, profileType, onClose, onSave }:
         case 'chunking':
           data = await apiClient.getChunkingProfile(profileId);
           break;
+        case 'graph_extraction':
+          data = await apiClient.getGraphExtractionProfile(profileId);
+          break;
         case 'retrieval':
           data = await apiClient.getRetrievalProfile(profileId);
           break;
@@ -48,8 +51,9 @@ export function ProfileDetailsModal({ profileId, profileType, onClose, onSave }:
           throw new Error(`Unknown profile type: ${profileType}`);
       }
 
-      setProfileData(data);
-      setEditedData(JSON.parse(JSON.stringify(data))); // Deep copy
+      const profilePayload = data?.profile ?? data;
+      setProfileData(profilePayload);
+      setEditedData(JSON.parse(JSON.stringify(profilePayload))); // Deep copy
       setError(null);
     } catch (err: any) {
       setError(err.message);
@@ -66,10 +70,21 @@ export function ProfileDetailsModal({ profileId, profileType, onClose, onSave }:
   };
 
   const handleSave = async () => {
-    // TODO: Implement save functionality when backend API is ready
-    alert('Save functionality will be implemented when backend API is ready');
-    if (onSave) {
-      onSave();
+    try {
+      switch (profileType) {
+        case 'graph_extraction':
+          await apiClient.updateGraphExtractionProfile(profileId, editedData);
+          break;
+        default:
+          throw new Error(`Saving not supported for profile type: ${profileType}`);
+      }
+
+      if (onSave) {
+        await onSave();
+      }
+      setIsEditing(false);
+    } catch (err: any) {
+      alert(`Failed to save profile: ${err.message}`);
     }
   };
 
@@ -121,6 +136,22 @@ export function ProfileDetailsModal({ profileId, profileType, onClose, onSave }:
     }
 
     if (Array.isArray(value)) {
+      if (isEditing) {
+        return (
+          <textarea
+            value={Array.isArray(editedData[key]) ? editedData[key].join('\n') : ''}
+            onChange={(e) => {
+              const nextValue = e.target.value
+                .split('\n')
+                .map((item) => item.trim())
+                .filter((item) => item.length > 0);
+              handleInputChange(key, nextValue);
+            }}
+            rows={Math.min(Math.max(value.length, 3), 10)}
+            className="w-full text-sm text-gray-900 border border-gray-300 rounded-md p-2 font-mono"
+          />
+        );
+      }
       return (
         <div className="space-y-1">
           {value.map((item, idx) => (

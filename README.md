@@ -42,6 +42,7 @@ RAGMesh is a comprehensive, configuration-driven RAG system designed specificall
   - New `chat_profiles.json` with 3 profile types
   - Enhanced judge profiles with improved validation thresholds
   - Better event tracking for chat sessions
+  - Graph extraction profiles are now viewable/editable in the Config tab with dedicated API endpoints
 
 - **🔧 Backend Enhancements**:
   - New `ChatSessionManager` for session lifecycle management

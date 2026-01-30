@@ -143,6 +143,87 @@ async def get_chunking_profile(profile_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/config/graph_extraction")
+async def list_graph_extraction_profiles():
+    """
+    List available graph extraction profiles
+
+    Returns:
+        Graph extraction profile IDs and descriptions
+    """
+    logger.info("Listing graph extraction profiles")
+
+    try:
+        profiles = config_loader.config["graph_extraction_profiles"]["profiles"]
+        return {
+            "profiles": [
+                {
+                    "profile_id": profile_id,
+                    "description": profile.get("description", "")
+                }
+                for profile_id, profile in profiles.items()
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Error listing graph extraction profiles: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/config/graph_extraction/{profile_id}")
+async def get_graph_extraction_profile(profile_id: str):
+    """
+    Get a specific graph extraction profile
+
+    Args:
+        profile_id: Graph extraction profile ID
+
+    Returns:
+        Graph extraction configuration
+    """
+    logger.info(f"Getting graph extraction profile: {profile_id}")
+
+    try:
+        profile = config_loader.get_graph_extraction_profile(profile_id)
+        return {"profile": profile.model_dump()}
+
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Graph extraction profile not found: {profile_id}")
+    except Exception as e:
+        logger.error(f"Error getting graph extraction profile: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/config/graph_extraction/{profile_id}")
+async def update_graph_extraction_profile(profile_id: str, profile_data: dict):
+    """
+    Update a graph extraction profile configuration
+
+    Args:
+        profile_id: Graph extraction profile ID
+        profile_data: Updated graph extraction profile configuration
+
+    Returns:
+        Updated graph extraction profile configuration
+    """
+    logger.info(f"Updating graph extraction profile: {profile_id}")
+
+    try:
+        config_loader.save_graph_extraction_profile(profile_id, profile_data)
+        updated_profile = config_loader.get_graph_extraction_profile(profile_id)
+        return {
+            "status": "updated",
+            "profile_id": profile_id,
+            "profile": updated_profile.model_dump()
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating graph extraction profile: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.put("/config/chunking/{profile_id}")
 async def update_chunking_profile(profile_id: str, profile_data: dict):
     """

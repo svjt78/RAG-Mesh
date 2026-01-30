@@ -41,12 +41,14 @@
         "Term"
       ],
       "relationship_types": [
-        "AMENDS",
+        "INCLUDES",
         "EXCLUDES",
         "SUBJECT_TO",
         "APPLIES_IN",
         "REFERENCES",
-        "DEFINES"
+        "DEFINES",
+        "OPERATES_IN",
+        "COMPLY_WITH"
       ]
     },
     "medical": {
